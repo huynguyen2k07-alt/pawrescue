@@ -1,0 +1,30 @@
+{% extends "admin/base.html" %}
+{% load i18n static %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} · {% endif %}{{ title }} · PawRescue{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'admin/css/pawrescue_admin.css' %}">
+{% endblock %}
+
+{% block branding %}
+    <a class="paw-admin-brand" href="{% url 'admin:index' %}" aria-label="PawRescue Control Center">
+        <span class="paw-admin-mark" aria-hidden="true">🐾</span>
+        <span><strong>PawRescue</strong><small>Control Center</small></span>
+    </a>
+{% endblock %}
+
+{% block nav-global %}
+    {% if user.is_authenticated %}
+        <nav class="paw-admin-global" aria-label="Liên kết nhanh">
+            <a href="{% url 'support:inbox' %}">Hộp thư{% if support_admin_unread_count %} <span class="paw-nav-badge">{{ support_admin_unread_count }}</span>{% endif %}</a>
+            <a href="{% url 'adoptions:dashboard' %}">Quản lý nhận nuôi</a>
+            <a href="{% url 'rescue:notification-list' %}">Thông báo</a>
+            <a class="paw-view-site" href="/">Xem website <span aria-hidden="true">↗</span></a>
+        </nav>
+    {% endif %}
+{% endblock %}

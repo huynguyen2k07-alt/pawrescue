@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Ghi khoản chi · {{ campaign.title }}{% endblock %}
+
+{% block content %}
+<section class="section container narrow-container">
+    <a class="back-link" href="{% url 'donations:campaign-detail' campaign.pk %}">← Quay lại chiến dịch</a>
+    <div class="page-intro"><span class="eyebrow eyebrow-dark">Sổ minh bạch</span><h1>Ghi khoản chi</h1><p>{{ campaign.title }}</p></div>
+    <form class="panel form-panel" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="form-grid">
+            {% for field in form %}
+                <div class="field{% if field.name == 'description' or field.name == 'receipt' %} field-wide{% endif %}{% if field.name == 'is_receipt_public' %} checkbox-field field-wide{% endif %}">
+                    {% if field.name == 'is_receipt_public' %}<label class="checkbox-control">{{ field }}<span>{{ field.label }}</span></label>{% else %}{{ field.label_tag }}{{ field }}{% endif %}
+                    {% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+        <div class="form-actions"><a class="button button-ghost" href="{% url 'donations:campaign-detail' campaign.pk %}">Hủy</a><button class="button button-primary" type="submit">Lưu khoản chi</button></div>
+    </form>
+</section>
+{% endblock %}

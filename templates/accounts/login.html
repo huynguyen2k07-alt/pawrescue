@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Đăng nhập · PawRescue{% endblock %}
+
+{% block content %}
+<section class="auth-section">
+    <div class="auth-card">
+        <div class="auth-heading">
+            <span class="brand-mark large" aria-hidden="true">🐾</span>
+            <span class="eyebrow eyebrow-dark">Chào mừng trở lại</span>
+            <h1>Đăng nhập</h1>
+            <p>Tiếp tục theo dõi và hỗ trợ các ca cứu hộ.</p>
+        </div>
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="form-errors">Email hoặc mật khẩu chưa đúng.</div>
+            {% endif %}
+            <div class="field">
+                <label for="{{ form.username.id_for_label }}">Email</label>
+                {{ form.username }}
+                {% for error in form.username.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+            </div>
+            <div class="field">
+                <label for="{{ form.password.id_for_label }}">Mật khẩu</label>
+                {{ form.password }}
+                {% for error in form.password.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+            </div>
+            {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+            <button class="button button-primary button-block" type="submit">Đăng nhập</button>
+        </form>
+
+        <p class="auth-switch">Chưa có tài khoản? <a href="{% url 'accounts:register' %}">Đăng ký miễn phí</a></p>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Thông báo · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container narrow-container notifications-page">
+    <header class="notification-page-heading">
+        <div>
+            <span class="eyebrow eyebrow-dark">Cập nhật cứu hộ</span>
+            <h1>Thông báo của bạn</h1>
+            <p>Theo dõi những thay đổi mới nhất của các ca bạn quan tâm.</p>
+        </div>
+        {% if unread_count %}
+            <form method="post" action="{% url 'rescue:notification-read-all' %}">
+                {% csrf_token %}
+                <button class="button button-ghost button-small" type="submit">Đánh dấu tất cả đã đọc</button>
+            </form>
+        {% endif %}
+    </header>
+
+    <nav class="notification-tabs" aria-label="Lọc thông báo">
+        <a class="{% if selected_filter == 'all' %}active{% endif %}" href="{% url 'rescue:notification-list' %}">
+            Tất cả <span>{{ total_count }}</span>
+        </a>
+        <a class="{% if selected_filter == 'unread' %}active{% endif %}" href="{% url 'rescue:notification-list' %}?filter=unread">
+            Chưa đọc <span>{{ unread_count }}</span>
+        </a>
+    </nav>
+
+    <div class="notification-list">
+        {% for notification in page_obj %}
+            <article class="notification-item{% if not notification.is_read %} unread{% endif %}">
+                <form method="post" action="{% url 'rescue:notification-open' notification.pk %}">
+                    {% csrf_token %}
+                    <button class="notification-open" type="submit">
+                        <span class="notification-kind notification-kind-{{ notification.kind }}" aria-hidden="true">
+                            {% if notification.kind == 'case_claimed' %}🤝{% elif notification.kind == 'case_assigned' %}🧭{% elif notification.kind == 'case_updated' %}📷{% elif notification.kind == 'adoption_submitted' %}💌{% elif notification.kind == 'adoption_reviewed' %}🏡{% elif notification.kind == 'donation_submitted' %}💝{% elif notification.kind == 'donation_reviewed' %}🧾{% else %}↻{% endif %}
+                        </span>
+                        <span class="notification-content">
+                            <span class="notification-title-row">
+                                <strong>{{ notification.title }}</strong>
+                                <time datetime="{{ notification.created_at|date:'c' }}">{{ notification.created_at|timesince }} trước</time>
+                            </span>
+                            <span class="notification-message">{{ notification.message }}</span>
+                            <span class="notification-meta">
+                                {% if notification.rescue_case %}Ca #{{ notification.rescue_case_id }} · {{ notification.rescue_case.title }}{% elif notification.kind == 'donation_submitted' or notification.kind == 'donation_reviewed' %}Quỹ cứu hộ{% else %}Hồ sơ nhận nuôi{% endif %}
+                                {% if notification.actor %}
+                                    · bởi {{ notification.actor.full_name|default:notification.actor.email }}
+                                {% endif %}
+                            </span>
+                        </span>
+                        {% if not notification.is_read %}<span class="unread-dot" aria-label="Chưa đọc"></span>{% endif %}
+                    </button>
+                </form>
+            </article>
+        {% empty %}
+            <div class="empty-state compact-empty">
+                <span aria-hidden="true">🔔</span>
+                <h2>{% if selected_filter == 'unread' %}Bạn đã đọc hết thông báo{% else %}Chưa có thông báo nào{% endif %}</h2>
+                <p>Các cập nhật về tiếp nhận, phân công và trạng thái ca cứu hộ sẽ xuất hiện tại đây.</p>
+                <a class="button button-primary button-small" href="{% url 'rescue:case-list' %}">Xem các ca cứu hộ</a>
+            </div>
+        {% endfor %}
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="pagination" aria-label="Phân trang thông báo">
+            {% if page_obj.has_previous %}
+                <a href="?filter={{ selected_filter }}&page={{ page_obj.previous_page_number }}">← Trang trước</a>
+            {% endif %}
+            <span>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+                <a href="?filter={{ selected_filter }}&page={{ page_obj.next_page_number }}">Trang sau →</a>
+            {% endif %}
+        </nav>
+    {% endif %}
+</section>
+{% endblock %}

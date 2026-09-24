@@ -1,0 +1,108 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static log pawrescue_admin %}
+
+{% block extrastyle %}<link rel="stylesheet" href="{% static 'admin/css/dashboard.css' %}">{{ block.super }}{% endblock %}
+{% block coltype %}colM{% endblock %}
+{% block bodyclass %}{{ block.super }} dashboard paw-dashboard{% endblock %}
+{% block nav-breadcrumbs %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+{% block content_title %}{% endblock %}
+
+{% block content %}
+{% pawrescue_admin_dashboard app_list as overview %}
+<div id="content-main" class="paw-admin-home">
+    <section class="paw-admin-hero">
+        <div>
+            <span class="paw-admin-eyebrow">Trung tâm vận hành</span>
+            <h1>Chào {{ user.full_name|default:user.email }},</h1>
+            <p>Tập trung các ca cần xử lý, đơn nhận nuôi và cảnh báo quan trọng trong một màn hình.</p>
+        </div>
+        <div class="paw-admin-hero-actions">
+            <a class="paw-admin-button" href="{% url 'support:inbox' %}">Hộp thư hỗ trợ{% if overview.pending_support_count %} · {{ overview.pending_support_count }} mới{% endif %}</a>
+            <a class="paw-admin-button paw-admin-button-primary" href="{% url 'admin:adoptions_animalprofile_add' %}">＋ Đăng hồ sơ nhận nuôi</a>
+            <a class="paw-admin-button" href="{% url 'admin:rescue_rescuecase_add' %}">＋ Tạo ca cứu hộ</a>
+        </div>
+    </section>
+
+    <section class="paw-metric-grid" aria-label="Tổng quan công việc">
+        <a href="{% url 'admin:rescue_rescuecase_changelist' %}"><span class="paw-metric-icon paw-metric-rescue">R</span><div><strong>{{ overview.active_case_count }}</strong><small>Ca đang hoạt động</small></div><em>{{ overview.critical_case_count }} rất khẩn cấp</em></a>
+        <a href="{% url 'admin:adoptions_adoptionapplication_changelist' %}?status__exact=pending"><span class="paw-metric-icon paw-metric-adoption">A</span><div><strong>{{ overview.pending_application_count }}</strong><small>Đơn nhận nuôi chờ xử lý</small></div><em>Mở danh sách →</em></a>
+        <a href="{% url 'admin:adoptions_adoptionsafetyreport_changelist' %}"><span class="paw-metric-icon paw-metric-safety">!</span><div><strong>{{ overview.pending_safety_count }}</strong><small>Cảnh báo an toàn</small></div><em>Cần xác minh</em></a>
+        <a href="{% url 'admin:donations_donation_changelist' %}?status__exact=pending"><span class="paw-metric-icon paw-metric-fund">₫</span><div><strong>{{ overview.pending_donation_count }}</strong><small>Đóng góp chờ xác nhận</small></div><em>Kiểm tra giao dịch →</em></a>
+        <a href="{% url 'support:inbox' %}"><span class="paw-metric-icon paw-metric-chat">C</span><div><strong>{{ overview.pending_support_count }}</strong><small>Cuộc chat chờ trả lời</small></div><em>Mở hộp thư →</em></a>
+    </section>
+
+    <div class="paw-work-grid">
+        <section class="paw-admin-panel paw-task-panel">
+            <header><div><span class="paw-admin-eyebrow">Việc cần xử lý</span><h2>Đơn nhận nuôi mới</h2></div><a href="{% url 'adoptions:dashboard' %}">Mở dashboard →</a></header>
+            <div class="paw-task-list">
+                {% for application in overview.recent_applications %}
+                    <a href="{% url 'admin:adoptions_adoptionapplication_change' application.pk %}">
+                        <span class="paw-task-avatar">{{ application.applicant_name|slice:':1'|upper }}</span>
+                        <span><strong>{{ application.applicant_name }} muốn nhận {{ application.animal.name }}</strong><small>{{ application.animal.organization.name }} · {{ application.submitted_at|timesince }} trước</small></span>
+                        <em class="paw-status paw-status-{{ application.status }}">{{ application.get_status_display }}</em>
+                    </a>
+                {% empty %}<div class="paw-empty"><span>✓</span><p>Không có đơn nhận nuôi đang chờ.</p></div>{% endfor %}
+            </div>
+        </section>
+
+        <section class="paw-admin-panel paw-alert-panel">
+            <header><div><span class="paw-admin-eyebrow">Cần chú ý</span><h2>Thông báo của bạn</h2></div><span class="paw-count-badge">{{ overview.unread_notification_count }} chưa đọc</span></header>
+            <div class="paw-alert-list">
+                {% for notification in overview.recent_notifications %}
+                    <a href="{% url 'rescue:notification-list' %}"><span aria-hidden="true">{% if notification.kind == 'adoption_safety' %}!{% else %}•{% endif %}</span><span><strong>{{ notification.title }}</strong><small>{{ notification.message|truncatechars:90 }}</small></span><time>{{ notification.created_at|timesince }}</time></a>
+                {% empty %}<div class="paw-empty"><span>✓</span><p>Bạn đã xem hết thông báo.</p></div>{% endfor %}
+            </div>
+        </section>
+    </div>
+
+    {% if overview.recent_safety_reports %}
+    <section class="paw-safety-strip">
+        <div><span class="paw-admin-eyebrow">Bảo vệ sau nhận nuôi</span><h2>{{ overview.pending_safety_count }} báo cáo đang cần xác minh</h2><p>Ưu tiên báo cáo rao bán, chuyển nhượng trái cam kết hoặc không liên lạc được.</p></div>
+        <div class="paw-safety-links">{% for report in overview.recent_safety_reports %}<a href="{% url 'admin:adoptions_adoptionsafetyreport_change' report.pk %}"><strong>{{ report.animal.name }}</strong><span>{{ report.get_reason_display }} · {{ report.submitted_at|timesince }} trước</span></a>{% endfor %}</div>
+    </section>
+    {% endif %}
+
+    <section class="paw-data-section">
+        <div class="paw-section-heading">
+            <div><span class="paw-admin-eyebrow">Dữ liệu hệ thống</span><h2>Quản lý theo khu vực</h2></div>
+            <p>Chọn một nhóm để xem danh sách hoặc tạo dữ liệu mới.</p>
+        </div>
+        <div class="paw-app-grid">
+            {% for app in app_list %}
+                <article class="paw-app-card app-{{ app.app_label }}">
+                    <header>
+                        <div>
+                            <span class="paw-app-index">0{{ forloop.counter }}</span>
+                            <h3><a href="{{ app.app_url }}">{{ app.name }}</a></h3>
+                        </div>
+                        <span>{{ app.record_count }} bản ghi</span>
+                    </header>
+                    <div class="paw-model-list">
+                        {% for model in app.models %}
+                            <div class="paw-model-row model-{{ model.object_name|lower }}">
+                                <div class="paw-model-name">
+                                    <div>{% if model.admin_url %}<a href="{{ model.admin_url }}">{{ model.name }}</a>{% else %}<span>{{ model.name }}</span>{% endif %}</div>
+                                    <strong class="paw-model-count" data-model-count="{{ app.app_label }}.{{ model.object_name|lower }}">{{ model.record_count }}</strong>
+                                </div>
+                                <div class="paw-model-actions">
+                                    {% if model.add_url %}<a class="paw-model-add" href="{{ model.add_url }}"><span aria-hidden="true">＋</span> Thêm mới</a>{% endif %}
+                                    {% if model.admin_url %}<a class="paw-model-view" href="{{ model.admin_url }}">Quản lý <span aria-hidden="true">→</span></a>{% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </article>
+            {% empty %}
+                <div class="paw-empty"><span>✓</span><p>Không có khu vực quản lý khả dụng.</p></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="paw-admin-panel paw-recent-actions">
+        <header><div><span class="paw-admin-eyebrow">Lịch sử</span><h2>Thao tác gần đây của bạn</h2></div></header>
+        {% get_admin_log 8 as admin_log for_user user %}
+        <ul>{% for entry in admin_log %}<li><span class="{% if entry.is_addition %}paw-action-add{% elif entry.is_deletion %}paw-action-delete{% else %}paw-action-change{% endif %}"></span><div>{% if entry.is_deletion or not entry.get_admin_url %}{{ entry.object_repr }}{% else %}<a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>{% endif %}<small>{{ entry.content_type.name|capfirst }} · {{ entry.action_time|timesince }} trước</small></div></li>{% empty %}<li class="paw-empty"><p>Chưa có thao tác nào.</p></li>{% endfor %}</ul>
+    </section>
+</div>
+{% endblock %}

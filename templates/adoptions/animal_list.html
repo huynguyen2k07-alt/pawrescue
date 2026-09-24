@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Tìm bạn đồng hành · PawRescue{% endblock %}
+
+{% block content %}
+<section class="adoption-hero">
+    <div class="container adoption-hero-inner">
+        <div>
+            <span class="eyebrow">Một mái nhà mới</span>
+            <h1>Tìm người bạn phù hợp với gia đình bạn.</h1>
+            <p>Mỗi hồ sơ đều được chăm sóc và xác minh bởi một tổ chức cứu hộ.</p>
+        </div>
+        {% if user.is_authenticated %}
+            <div class="heading-actions">
+                <a class="button button-light" href="{% url 'adoptions:my-applications' %}">Đơn của tôi</a>
+                {% if can_manage_adoptions %}<a class="button button-accent" href="{% url 'adoptions:dashboard' %}">Khu vực quản trị</a>{% endif %}
+            </div>
+        {% endif %}
+    </div>
+</section>
+
+<section class="adoption-trust-strip" aria-label="Cam kết nhận nuôi an toàn">
+    <div class="container">
+        <div><strong>01</strong><span>Xác minh người nhận nuôi</span></div>
+        <div><strong>02</strong><span>Cam kết không mua bán</span></div>
+        <div><strong>03</strong><span>Theo dõi sau bàn giao</span></div>
+        <div><strong>04</strong><span>Báo cáo và khóa vi phạm</span></div>
+    </div>
+</section>
+
+<section class="section container">
+    <form class="adoption-filter-bar" method="get">
+        <label class="sr-only" for="id_adoption_q">Tìm kiếm</label>
+        <input id="id_adoption_q" name="q" value="{{ query }}" placeholder="Tên, giống hoặc khu vực...">
+        <label class="sr-only" for="id_animal_type">Loại động vật</label>
+        <select id="id_animal_type" name="animal_type">
+            <option value="">Tất cả động vật</option>
+            {% for value, label in animal_type_choices %}<option value="{{ value }}" {% if selected_animal_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <label class="sr-only" for="id_age_group">Độ tuổi</label>
+        <select id="id_age_group" name="age_group">
+            <option value="">Mọi độ tuổi</option>
+            {% for value, label in age_group_choices %}<option value="{{ value }}" {% if selected_age_group == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <label class="sr-only" for="id_sex">Giới tính</label>
+        <select id="id_sex" name="sex">
+            <option value="">Mọi giới tính</option>
+            {% for value, label in sex_choices %}<option value="{{ value }}" {% if selected_sex == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <button class="button button-primary" type="submit">Tìm kiếm</button>
+        {% if query or selected_animal_type or selected_age_group or selected_sex %}<a class="clear-filter" href="{% url 'adoptions:animal-list' %}">Xóa bộ lọc</a>{% endif %}
+    </form>
+
+    <div class="adoption-grid">
+        {% for animal in page_obj %}
+            <article class="adoption-card">
+                <a class="adoption-card-media" href="{% url 'adoptions:animal-detail' animal.pk %}">
+                    {% with primary=animal.images.all.0 %}
+                        {% if primary %}<img src="{{ primary.image.url }}" alt="{{ animal.name }}">{% else %}<span aria-hidden="true">🐾</span>{% endif %}
+                    {% endwith %}
+                    <span class="adoption-status adoption-status-{{ animal.status }}">{{ animal.get_status_display }}</span>
+                </a>
+                <div class="adoption-card-body">
+                    <div class="adoption-card-topline">
+                        <span>{{ animal.get_animal_type_display }} · {{ animal.get_sex_display }}</span>
+                        <span>{{ animal.get_age_group_display }}</span>
+                    </div>
+                    <h2><a href="{% url 'adoptions:animal-detail' animal.pk %}">{{ animal.name }}</a></h2>
+                    <p>{{ animal.breed|default:"Chưa xác định giống" }} · {{ animal.location }}</p>
+                    <div class="adoption-card-footer">
+                        <span>{{ animal.organization.name }}</span>
+                        <a href="{% url 'adoptions:animal-detail' animal.pk %}">Xem hồ sơ →</a>
+                    </div>
+                </div>
+            </article>
+        {% empty %}
+            <div class="empty-state adoption-empty">
+                <span aria-hidden="true">🏡</span>
+                <h2>Chưa tìm thấy hồ sơ phù hợp</h2>
+                <p>Hãy thử thay đổi bộ lọc hoặc quay lại sau để gặp thêm những người bạn mới.</p>
+            </div>
+        {% endfor %}
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="pagination" aria-label="Phân trang hồ sơ nhận nuôi">
+            {% if page_obj.has_previous %}<a href="?q={{ query|urlencode }}&animal_type={{ selected_animal_type }}&age_group={{ selected_age_group }}&sex={{ selected_sex }}&page={{ page_obj.previous_page_number }}">← Trang trước</a>{% endif %}
+            <span>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}<a href="?q={{ query|urlencode }}&animal_type={{ selected_animal_type }}&age_group={{ selected_age_group }}&sex={{ selected_sex }}&page={{ page_obj.next_page_number }}">Trang sau →</a>{% endif %}
+        </nav>
+    {% endif %}
+</section>
+{% endblock %}

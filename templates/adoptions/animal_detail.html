@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}{{ animal.name }} · Nhận nuôi · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container">
+    <a class="back-link" href="{% url 'adoptions:animal-list' %}">← Quay lại danh sách nhận nuôi</a>
+    <div class="adoption-detail-layout">
+        <main class="adoption-detail-main">
+            <article class="panel adoption-profile-panel">
+                <div class="adoption-profile-heading">
+                    <div>
+                        <span class="adoption-status adoption-status-{{ animal.status }}">{{ animal.get_status_display }}</span>
+                        <h1>{{ animal.name }}</h1>
+                        <p>{{ animal.get_animal_type_display }}{% if animal.breed %} · {{ animal.breed }}{% endif %} · {{ animal.location }}</p>
+                    </div>
+                    <span class="animal-badge">{{ animal.get_age_group_display }}</span>
+                </div>
+
+                {% with images=animal.images.all %}
+                    {% if images %}
+                        <div class="adoption-gallery">
+                            {% for item in images %}
+                                <a href="{{ item.image.url }}" target="_blank" rel="noopener"><img src="{{ item.image.url }}" alt="{{ item.caption|default:animal.name }}"></a>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <section class="detail-section">
+                    <h2>Câu chuyện của {{ animal.name }}</h2>
+                    <p>{{ animal.description|linebreaksbr }}</p>
+                </section>
+
+                <div class="adoption-fact-grid">
+                    <div><span>Giới tính</span><strong>{{ animal.get_sex_display }}</strong></div>
+                    <div><span>Tuổi</span><strong>{{ animal.estimated_age|default:animal.get_age_group_display }}</strong></div>
+                    <div><span>Kích thước</span><strong>{{ animal.get_size_display }}</strong></div>
+                    <div><span>Màu sắc</span><strong>{{ animal.color|default:"Chưa cập nhật" }}</strong></div>
+                    <div><span>Tiêm phòng</span><strong>{{ animal.get_vaccination_status_display }}</strong></div>
+                    <div><span>Triệt sản</span><strong>{% if animal.is_neutered %}Đã triệt sản{% else %}Chưa triệt sản{% endif %}</strong></div>
+                </div>
+
+                <div class="adoption-info-grid">
+                    <section><h2>Tính cách</h2><p>{{ animal.temperament|linebreaksbr }}</p></section>
+                    <section><h2>Sức khỏe</h2><p>{{ animal.health_status|linebreaksbr }}</p></section>
+                    {% if animal.special_needs %}<section><h2>Chăm sóc đặc biệt</h2><p>{{ animal.special_needs|linebreaksbr }}</p></section>{% endif %}
+                </div>
+            </article>
+        </main>
+
+        <aside class="adoption-detail-sidebar">
+            <section class="panel adoption-organization-card">
+                <span class="eyebrow eyebrow-dark">Đơn vị phụ trách</span>
+                <h2>{{ animal.organization.name }}</h2>
+                <p>{{ animal.organization.address|default:animal.location }}</p>
+                {% if animal.organization.phone %}<p><strong>{{ animal.organization.phone }}</strong></p>{% endif %}
+            </section>
+
+            <section class="panel adoption-safety-card">
+                <span class="eyebrow eyebrow-dark">Nhận nuôi có trách nhiệm</span>
+                <h2>Cam kết bảo vệ {{ animal.name }}</h2>
+                <ul>
+                    <li>Không mua bán, trao đổi hoặc tự ý chuyển nhượng.</li>
+                    <li>Bàn giao lại cho tổ chức nếu không thể tiếp tục chăm sóc.</li>
+                    <li>Đồng ý kiểm tra tình trạng sau khi nhận nuôi.</li>
+                </ul>
+                {% if active_placement %}<p class="placement-state placement-state-{{ active_placement.status }}">Đang được tổ chức theo dõi: {{ active_placement.get_status_display }}</p>{% endif %}
+            </section>
+
+            {% if can_manage %}
+                <section class="panel action-panel">
+                    <h2>Quản lý hồ sơ</h2>
+                    <a class="button button-primary button-block" href="{% url 'adoptions:animal-update' animal.pk %}">Chỉnh sửa hồ sơ</a>
+                    <a class="button button-ghost button-block" href="{% url 'adoptions:dashboard' %}">Xem các đơn đăng ký</a>
+                </section>
+            {% elif existing_application %}
+                <section class="panel adoption-application-state">
+                    <span class="eyebrow eyebrow-dark">Đơn của bạn</span>
+                    <h2>{{ existing_application.get_status_display }}</h2>
+                    <p>Bạn đã gửi đơn vào {{ existing_application.submitted_at|date:"H:i, d/m/Y" }}.</p>
+                    <a class="button button-ghost button-block" href="{% url 'adoptions:my-applications' %}">Theo dõi đơn</a>
+                </section>
+            {% elif can_apply %}
+                {% if user.is_authenticated %}
+                    <section class="panel adoption-application-panel">
+                        <span class="eyebrow">Mở lòng đón bạn</span>
+                        <h2>Đăng ký nhận nuôi</h2>
+                        <p>Thông tin của bạn chỉ được chia sẻ với tổ chức phụ trách.</p>
+                        <form method="post" action="{% url 'adoptions:application-create' animal.pk %}">
+                            {% csrf_token %}
+                            {% for field in application_form %}
+                                <div class="field{% if field.name == 'has_children' or field.name == 'agrees_no_resale' or field.name == 'agrees_return_to_organization' or field.name == 'agrees_follow_up' %} checkbox-field{% endif %}{% if field.name == 'agrees_no_resale' %} pledge-start{% endif %}">
+                                    {% if field.name == 'has_children' or field.name == 'agrees_no_resale' or field.name == 'agrees_return_to_organization' or field.name == 'agrees_follow_up' %}<label class="checkbox-control">{{ field }}<span>{{ field.label }}</span></label>{% else %}{{ field.label_tag }}{{ field }}{% endif %}
+                                    {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+                                </div>
+                            {% endfor %}
+                            <button class="button button-accent button-block" type="submit">Gửi đơn nhận nuôi</button>
+                        </form>
+                    </section>
+                {% else %}
+                    <section class="panel adoption-application-state">
+                        <h2>Bạn muốn nhận nuôi {{ animal.name }}?</h2>
+                        <p>Đăng nhập để gửi thông tin tới tổ chức phụ trách.</p>
+                        <a class="button button-accent button-block" href="{% url 'accounts:login' %}?next={{ request.path|urlencode }}">Đăng nhập để đăng ký</a>
+                    </section>
+                {% endif %}
+            {% else %}
+                <section class="panel adoption-application-state">
+                    <h2>Hồ sơ đang tạm ngừng nhận đơn</h2>
+                    <p>Tổ chức đang xử lý các đăng ký hiện có hoặc chuẩn bị thêm thông tin.</p>
+                </section>
+            {% endif %}
+
+            {% if animal.rescue_case %}
+                <a class="rescue-origin-link" href="{% url 'rescue:case-detail' animal.rescue_case_id %}">Xem hành trình cứu hộ ban đầu →</a>
+            {% endif %}
+            {% if user.is_authenticated %}
+                <a class="safety-report-link" href="{% url 'adoptions:safety-report-create' animal.pk %}"><span aria-hidden="true">!</span>Báo nghi ngờ mua bán hoặc ngược đãi</a>
+            {% endif %}
+        </aside>
+    </div>
+</section>
+{% endblock %}

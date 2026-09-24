@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Cẩm nang cộng đồng · PawRescue{% endblock %}
+
+{% block content %}
+<section class="knowledge-page-hero">
+    <div class="container">
+        <span class="eyebrow">Kiến thức có nguồn</span>
+        <h1>Cẩm nang giúp động vật<br>an toàn hơn mỗi ngày.</h1>
+        <p>Những hướng dẫn dễ hiểu dành cho người báo tin, tình nguyện viên và gia đình có thú cưng.</p>
+    </div>
+</section>
+
+<section class="section container">
+    <form class="knowledge-filters" method="get">
+        <a class="{% if not selected_category %}is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}">Tất cả</a>
+        {% for value, label in category_choices %}
+            <a class="{% if selected_category == value %}is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}?category={{ value }}">{{ label }}</a>
+        {% endfor %}
+    </form>
+    <div class="knowledge-list-grid">
+        {% for article in articles %}
+            <article class="knowledge-list-card">
+                <a class="knowledge-list-media" href="{% url 'rescue:knowledge-detail' article.slug %}">
+                    {% if article.cover_image %}<img src="{{ article.cover_image.url }}" alt="" loading="lazy">{% elif article.static_image_path %}<img src="{% static article.static_image_path %}" alt="" loading="lazy">{% endif %}
+                </a>
+                <div>
+                    <span class="knowledge-category">{{ article.get_category_display }}</span>
+                    <h2><a href="{% url 'rescue:knowledge-detail' article.slug %}">{{ article.title }}</a></h2>
+                    <p>{{ article.excerpt }}</p>
+                    <a class="knowledge-read-link" href="{% url 'rescue:knowledge-detail' article.slug %}">Đọc bài <span aria-hidden="true">→</span></a>
+                </div>
+            </article>
+        {% empty %}
+            <div class="empty-state"><h2>Chưa có bài viết phù hợp</h2><p>Hãy thử chọn một chủ đề khác.</p></div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

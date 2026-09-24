@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Quỹ cứu hộ minh bạch · PawRescue{% endblock %}
+
+{% block content %}
+<section class="fundraising-hero">
+    <div class="container fundraising-hero-inner">
+        <div>
+            <span class="eyebrow">Chung tay cứu hộ</span>
+            <h1>Mỗi đóng góp đều được ghi nhận minh bạch.</h1>
+            <p>Theo dõi số tiền đã xác nhận, chi phí thực tế và hành trình của từng chiến dịch.</p>
+        </div>
+        <div class="heading-actions">
+            {% if user.is_authenticated %}<a class="button button-light" href="{% url 'donations:my-donations' %}">Đóng góp của tôi</a>{% endif %}
+            {% if can_manage_funds %}<a class="button button-accent" href="{% url 'donations:dashboard' %}">Quản lý quỹ</a>{% endif %}
+        </div>
+    </div>
+</section>
+
+<section class="section container">
+    <form class="fundraising-filter" method="get">
+        <label class="sr-only" for="id_campaign_q">Tìm chiến dịch</label>
+        <input id="id_campaign_q" name="q" value="{{ query }}" placeholder="Tên chiến dịch hoặc tổ chức...">
+        <label class="sr-only" for="id_campaign_status">Trạng thái</label>
+        <select id="id_campaign_status" name="status">
+            <option value="">Tất cả trạng thái</option>
+            {% for value, label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <button class="button button-primary" type="submit">Tìm kiếm</button>
+        {% if query or selected_status %}<a class="clear-filter" href="{% url 'donations:campaign-list' %}">Xóa bộ lọc</a>{% endif %}
+    </form>
+
+    <div class="campaign-grid">
+        {% for campaign in page_obj %}
+            <article class="campaign-card">
+                <a class="campaign-card-media" href="{% url 'donations:campaign-detail' campaign.pk %}">
+                    {% if campaign.cover_image %}<img src="{{ campaign.cover_image.url }}" alt="{{ campaign.title }}">{% else %}<span aria-hidden="true">💝</span>{% endif %}
+                    <span class="campaign-status campaign-status-{{ campaign.status }}">{{ campaign.get_status_display }}</span>
+                </a>
+                <div class="campaign-card-body">
+                    <span class="campaign-organization">{{ campaign.organization.name }}</span>
+                    <h2><a href="{% url 'donations:campaign-detail' campaign.pk %}">{{ campaign.title }}</a></h2>
+                    <p>{{ campaign.description|truncatewords:24 }}</p>
+                    <div class="fund-progress" aria-label="Đã đạt {{ campaign.progress_percent }} phần trăm mục tiêu"><span style="width: {{ campaign.progress_percent }}%"></span></div>
+                    <div class="campaign-money-row">
+                        <strong>{{ campaign.confirmed_amount|floatformat:"0g" }} ₫</strong>
+                        <span>/ {{ campaign.target_amount|floatformat:"0g" }} ₫</span>
+                    </div>
+                    <div class="campaign-card-footer"><span>{{ campaign.donation_count }} lượt đã xác nhận</span><a href="{% url 'donations:campaign-detail' campaign.pk %}">Xem minh bạch →</a></div>
+                </div>
+            </article>
+        {% empty %}
+            <div class="empty-state campaign-empty"><span>💚</span><h2>Chưa có chiến dịch phù hợp</h2><p>Các chiến dịch cứu hộ mới sẽ được công khai tại đây.</p></div>
+        {% endfor %}
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="pagination" aria-label="Phân trang chiến dịch">
+            {% if page_obj.has_previous %}<a href="?q={{ query|urlencode }}&status={{ selected_status }}&page={{ page_obj.previous_page_number }}">← Trang trước</a>{% endif %}
+            <span>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}<a href="?q={{ query|urlencode }}&status={{ selected_status }}&page={{ page_obj.next_page_number }}">Trang sau →</a>{% endif %}
+        </nav>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Đơn nhận nuôi của tôi · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container narrow-container">
+    <div class="section-heading">
+        <div><span class="eyebrow eyebrow-dark">Hành trình nhận nuôi</span><h1>Đơn của tôi</h1></div>
+        <a class="button button-primary button-small" href="{% url 'adoptions:animal-list' %}">Tìm thêm bạn đồng hành</a>
+    </div>
+    <div class="application-list">
+        {% for application in applications %}
+            <article class="panel application-card">
+                {% with primary=application.animal.images.all.0 %}
+                    {% if primary %}<img src="{{ primary.image.url }}" alt="{{ application.animal.name }}">{% else %}<div class="application-placeholder">🐾</div>{% endif %}
+                {% endwith %}
+                <div class="application-card-content">
+                    <div class="application-card-heading">
+                        <div><span class="application-status application-status-{{ application.status }}">{{ application.get_status_display }}</span><h2><a href="{% url 'adoptions:animal-detail' application.animal_id %}">{{ application.animal.name }}</a></h2></div>
+                        <time>{{ application.submitted_at|date:"d/m/Y" }}</time>
+                    </div>
+                    <p>{{ application.animal.organization.name }} · {{ application.animal.location }}</p>
+                    {% if application.review_note %}<div class="review-note"><strong>Phản hồi từ tổ chức</strong><p>{{ application.review_note }}</p></div>{% endif %}
+                    {% if application.placement %}
+                        <div class="adoption-followup-state">
+                            <div><strong>Hồ sơ bảo vệ sau nhận nuôi</strong><span>{{ application.placement.get_status_display }}{% if application.placement.next_follow_up_on %} · Lịch liên hệ tiếp theo {{ application.placement.next_follow_up_on|date:"d/m/Y" }}{% endif %}</span></div>
+                            <a href="{% url 'adoptions:safety-report-create' application.animal_id %}">Báo vấn đề</a>
+                        </div>
+                    {% endif %}
+                    {% if application.status == 'pending' or application.status == 'reviewing' %}
+                        <form method="post" action="{% url 'adoptions:application-withdraw' application.pk %}">
+                            {% csrf_token %}<button class="button button-ghost button-small" type="submit">Rút đơn</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </article>
+        {% empty %}
+            <div class="empty-state"><span>💌</span><h2>Bạn chưa gửi đơn nhận nuôi</h2><p>Khám phá những hồ sơ đang tìm kiếm một gia đình mới.</p><a class="button button-primary" href="{% url 'adoptions:animal-list' %}">Xem hồ sơ nhận nuôi</a></div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "admin/change_list.html" %}
+
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div class="paw-rescue-operations">
+    <header class="paw-rescue-operations-heading">
+        <div>
+            <span class="paw-admin-eyebrow">Điều phối cứu hộ</span>
+            <h1>Xử lý ca bằng một nút</h1>
+            <p>Xác nhận thông tin, ghi nhận cứu thành công hoặc hủy ca ngay tại đây.</p>
+        </div>
+        <a href="{% url 'admin:rescue_rescuecase_add' %}">＋ Thêm ca mới</a>
+    </header>
+
+    <div class="paw-rescue-metrics">
+        <div><span>Cần xử lý</span><strong>{{ rescue_counts.active }}</strong><small>ca đang hoạt động</small></div>
+        <div class="is-success"><span>Đã cứu thành công</span><strong>{{ rescue_counts.rescued }}</strong><small>ca được ghi nhận</small></div>
+        <div class="is-cancelled"><span>Đã hủy</span><strong>{{ rescue_counts.cancelled }}</strong><small>ca không tiếp tục</small></div>
+    </div>
+
+    <section class="paw-rescue-workflow" aria-labelledby="paw-active-cases-title">
+        <div class="paw-rescue-section-heading">
+            <div><strong id="paw-active-cases-title">Ca cần xử lý</strong><span>Ưu tiên xác nhận và cập nhật kết quả thực tế.</span></div>
+            <span>{{ rescue_counts.active }} ca</span>
+        </div>
+        <div class="paw-rescue-workflow-list">
+            {% for case in workflow_cases %}
+                <article class="paw-rescue-workflow-row">
+                    <a class="paw-rescue-case-copy" href="{% url 'admin:rescue_rescuecase_change' case.pk %}">
+                        <span>#{{ case.pk }} · {{ case.get_animal_type_display }}</span>
+                        <strong>{{ case.title }}</strong>
+                        <small>{{ case.address|truncatechars:70 }} · {{ case.organization|default:"Chưa có đơn vị" }}</small>
+                    </a>
+                    <span class="paw-rescue-status paw-rescue-status-{{ case.status }}">{{ case.get_status_display }}</span>
+                    <div class="paw-rescue-quick-actions">
+                        {% if case.status == 'reported' %}
+                            <form method="post" action="{% url 'admin:rescue_rescuecase_quick_status' case.pk 'verified' %}">{% csrf_token %}<button class="is-verify" type="submit">Xác nhận</button></form>
+                        {% endif %}
+                        <form method="post" action="{% url 'admin:rescue_rescuecase_quick_status' case.pk 'rescued' %}">{% csrf_token %}<button class="is-rescued" type="submit" onclick="return confirm('Xác nhận động vật đã được giải cứu thành công?')">Cứu thành công</button></form>
+                        <form method="post" action="{% url 'admin:rescue_rescuecase_quick_status' case.pk 'cancelled' %}">{% csrf_token %}<button class="is-cancelled" type="submit" onclick="return confirm('Bạn chắc chắn muốn hủy ca này?')">Hủy ca</button></form>
+                    </div>
+                </article>
+            {% empty %}
+                <div class="paw-rescue-empty"><span>✓</span><strong>Không còn ca nào chờ xử lý</strong><p>Tất cả ca đã có kết quả rõ ràng.</p></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="paw-rescued-history" aria-labelledby="paw-rescued-title">
+        <div class="paw-rescue-section-heading">
+            <div><strong id="paw-rescued-title">Đã giải cứu thành công</strong><span>Lịch sử những trường hợp đã được đưa tới nơi an toàn.</span></div>
+            <a href="{{ all_rescued_url }}">Xem tất cả {{ rescue_counts.rescued }} ca →</a>
+        </div>
+        <div class="paw-rescued-grid">
+            {% for case in rescued_cases %}
+                <a href="{% url 'admin:rescue_rescuecase_change' case.pk %}">
+                    <span class="paw-rescued-check">✓</span>
+                    <div><strong>{{ case.title }}</strong><small>{{ case.get_animal_type_display }} · {{ case.organization|default:"PawRescue" }}</small></div>
+                    <time>{{ case.closed_at|default:case.updated_at|date:"d/m/Y" }}</time>
+                </a>
+            {% empty %}
+                <div class="paw-rescue-empty compact"><span>🐾</span><p>Chưa có ca nào được ghi nhận giải cứu thành công.</p></div>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+
+<details class="paw-rescue-data"{% if request.GET %} open{% endif %}>
+    <summary>Dữ liệu đầy đủ, tìm kiếm và bộ lọc <span>⌄</span></summary>
+    {{ block.super }}
+</details>
+{% endblock %}

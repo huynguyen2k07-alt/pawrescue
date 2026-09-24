@@ -1,0 +1,28 @@
+{% extends "admin/change_form.html" %}
+
+{% block form_top %}
+    {{ block.super }}
+    {% if original %}
+        <section class="paw-feedback-detail" aria-labelledby="paw-feedback-detail-title">
+            <header>
+                <span class="paw-feedback-avatar" aria-hidden="true">{{ original.name|slice:":1"|upper }}</span>
+                <div>
+                    <span class="paw-admin-eyebrow">{{ original.get_category_display }}</span>
+                    <h2 id="paw-feedback-detail-title">{{ original.name }}</h2>
+                    <a href="mailto:{{ original.email }}">{{ original.email }}</a>
+                </div>
+                <span class="paw-feedback-status paw-feedback-status-{{ original.status }}">{{ original.get_status_display }}</span>
+            </header>
+            <blockquote>{{ original.message|linebreaksbr }}</blockquote>
+            <div class="paw-feedback-detail-actions">
+                <a class="is-gmail" href="{{ gmail_reply_url }}" target="_blank" rel="noopener noreferrer">Trả lời qua Gmail ↗</a>
+                {% if original.user_id %}
+                    <button class="is-chat" type="submit" formaction="{% url 'admin:rescue_communityfeedback_open_chat' original.pk %}" formmethod="post">Mở chat với người gửi</button>
+                {% endif %}
+                {% if original.status != 'closed' %}
+                    <button type="submit" formaction="{% url 'admin:rescue_communityfeedback_quick_status' original.pk 'closed' %}" formmethod="post">Đánh dấu đã xử lý</button>
+                {% endif %}
+            </div>
+        </section>
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Ca của tôi · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow eyebrow-dark">Theo dõi tin đã gửi</span>
+            <h1>Ca cứu hộ của tôi</h1>
+        </div>
+        <a class="button button-accent" href="{% url 'rescue:case-create' %}">Báo ca mới</a>
+    </div>
+
+    {% if cases %}
+        <div class="case-grid">
+            {% for case in cases %}
+                {% include "rescue/_case_card.html" with case=case %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <span aria-hidden="true">🐾</span>
+            <h2>Bạn chưa gửi tin báo nào</h2>
+            <p>Khi gặp động vật cần giúp đỡ, hãy gửi thông tin để cộng đồng hỗ trợ.</p>
+            <a class="button button-primary" href="{% url 'rescue:case-create' %}">Gửi tin báo đầu tiên</a>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_create %}Tạo chiến dịch gây quỹ{% else %}Sửa chiến dịch{% endif %} · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container narrow-container">
+    <div class="page-intro"><span class="eyebrow eyebrow-dark">Quỹ cứu hộ</span><h1>{% if is_create %}Tạo chiến dịch gây quỹ{% else %}Cập nhật chiến dịch{% endif %}</h1><p>Mô tả rõ mục tiêu, số tiền cần thiết và thông tin chuyển khoản để cộng đồng dễ dàng đồng hành.</p></div>
+    <form class="panel form-panel" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid campaign-form-grid">
+            {% for field in form %}
+                <div class="field{% if field.name == 'description' or field.name == 'cover_image' %} field-wide{% endif %}">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>
+            {% endfor %}
+        </div>
+        <div class="form-actions"><a class="button button-ghost" href="{% if campaign %}{% url 'donations:campaign-detail' campaign.pk %}{% else %}{% url 'donations:campaign-list' %}{% endif %}">Hủy</a><button class="button button-primary" type="submit">{% if is_create %}Tạo chiến dịch{% else %}Lưu thay đổi{% endif %}</button></div>
+    </form>
+</section>
+{% endblock %}

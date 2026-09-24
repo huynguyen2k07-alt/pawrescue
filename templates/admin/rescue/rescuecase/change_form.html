@@ -1,0 +1,53 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block form_top %}
+    {{ block.super }}
+    {% if original and original.reporter_id %}
+        <section class="paw-case-contact-banner" aria-labelledby="paw-case-contact-title">
+            <span class="paw-case-contact-avatar" aria-hidden="true">{{ original.reporter.full_name|default:original.reporter.email|slice:":1"|upper }}</span>
+            <div>
+                <strong id="paw-case-contact-title">Người báo tin: {{ original.reporter.full_name|default:original.reporter.email }}</strong>
+                <p>{{ original.reporter.email }}{% if original.contact_phone %} · {{ original.contact_phone }}{% elif original.reporter.phone %} · {{ original.reporter.phone }}{% endif %}</p>
+            </div>
+            <button class="paw-case-chat-button" type="submit" formaction="{% url 'support:open-case-chat' original.pk %}" formmethod="post">Nhắn người báo tin</button>
+        </section>
+    {% elif original %}
+        <section class="paw-case-contact-banner has-no-account">
+            <span class="paw-case-contact-avatar" aria-hidden="true">?</span>
+            <div><strong>Không có tài khoản người báo tin</strong><p>Bạn vẫn có thể liên hệ qua số điện thoại được lưu trong ca này.</p></div>
+        </section>
+    {% endif %}
+    {% if original %}
+        <section class="paw-case-workflow" aria-label="Cập nhật nhanh trạng thái ca cứu hộ">
+            <div><strong>Cập nhật kết quả</strong><p>Chọn đúng một trạng thái thực tế cho ca này.</p></div>
+            <div>
+                {% if original.status == 'reported' %}<button class="is-verify" type="submit" formaction="{% url 'admin:rescue_rescuecase_quick_status' original.pk 'verified' %}" formmethod="post">Xác nhận</button>{% endif %}
+                {% if original.status != 'rescued' and original.status != 'closed' and original.status != 'cancelled' %}
+                    <button class="is-rescued" type="submit" formaction="{% url 'admin:rescue_rescuecase_quick_status' original.pk 'rescued' %}" formmethod="post" onclick="return confirm('Xác nhận động vật đã được giải cứu thành công?')">Cứu thành công</button>
+                    <button class="is-cancelled" type="submit" formaction="{% url 'admin:rescue_rescuecase_quick_status' original.pk 'cancelled' %}" formmethod="post" onclick="return confirm('Bạn chắc chắn muốn hủy ca này?')">Hủy ca</button>
+                {% else %}
+                    <span class="paw-case-workflow-final">{{ original.get_status_display }}</span>
+                {% endif %}
+            </div>
+        </section>
+    {% endif %}
+    {% if accept_case_available %}
+        <section class="paw-case-accept-banner" aria-labelledby="paw-case-accept-title">
+            <span class="paw-case-accept-icon" aria-hidden="true">✓</span>
+            <div>
+                <strong id="paw-case-accept-title">Ca này đang chờ tiếp nhận</strong>
+                <p>Không cần tạo tổ chức thủ công. PawRescue sẽ tự nhận ca, chuyển sang “Đã xác nhận” và báo cho người gửi.</p>
+            </div>
+            <button type="submit" name="_accept_case" value="1">Tiếp nhận bởi PawRescue</button>
+        </section>
+    {% elif original and original.organization_id %}
+        <section class="paw-case-accept-banner is-accepted" aria-label="Trạng thái tiếp nhận">
+            <span class="paw-case-accept-icon" aria-hidden="true">✓</span>
+            <div>
+                <strong>Đã được tiếp nhận</strong>
+                <p>Đơn vị phụ trách: {{ original.organization }}</p>
+            </div>
+        </section>
+    {% endif %}
+{% endblock %}

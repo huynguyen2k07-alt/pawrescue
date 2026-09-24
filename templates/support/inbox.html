@@ -1,0 +1,106 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Hộp thư hỗ trợ · PawRescue{% endblock %}
+{% block bodyclass %}{{ block.super }} support-inbox-page{% endblock %}
+{% block extrahead %}{{ block.super }}<script defer src="{% static 'admin/js/support-inbox.js' %}"></script>{% endblock %}
+{% block nav-breadcrumbs %}
+<nav aria-label="Điều hướng"><div class="breadcrumbs"><a href="{% url 'admin:index' %}">Tổng quan</a> › Hộp thư hỗ trợ</div></nav>
+{% endblock %}
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div class="support-inbox-heading">
+    <div><span class="paw-admin-eyebrow">Hỗ trợ người dùng</span><h1>Hộp thư PawRescue</h1><p>Đọc và trả lời các câu hỏi gửi từ widget trên website.</p></div>
+    <a href="{% url 'admin:index' %}">← Quay lại tổng quan</a>
+</div>
+
+<div
+    class="support-inbox-layout"
+    data-support-inbox
+    data-state-url="{% url 'support:inbox-state' %}"
+    data-selected-id="{% if selected_conversation %}{{ selected_conversation.pk }}{% endif %}"
+>
+    <aside class="support-conversation-list" aria-label="Danh sách cuộc trò chuyện">
+        <header><strong>Cuộc trò chuyện</strong><span data-conversation-count>{{ conversations|length }}</span></header>
+        <div data-conversation-list>
+            {% for conversation in conversations %}
+                <a class="{% if selected_conversation.pk == conversation.pk %}is-active{% endif %}" href="?conversation={{ conversation.pk }}">
+                    <span class="support-conversation-avatar">{{ conversation.user.full_name|default:conversation.user.email|slice:':1'|upper }}</span>
+                    <span><strong>{{ conversation.user.full_name|default:conversation.user.email }}</strong><small>{{ conversation.get_status_display }} · {{ conversation.last_message_at|timesince }} trước</small></span>
+                    {% if conversation.unread_count %}<em>{{ conversation.unread_count }}</em>{% endif %}
+                </a>
+            {% empty %}<div class="support-inbox-empty"><span>✓</span><p>Chưa có cuộc trò chuyện nào.</p></div>{% endfor %}
+        </div>
+    </aside>
+
+    <section class="support-thread">
+        {% if selected_conversation %}
+            <header>
+                <div class="support-conversation-avatar">{{ selected_conversation.user.full_name|default:selected_conversation.user.email|slice:':1'|upper }}</div>
+                <div><strong>{{ selected_conversation.user.full_name|default:selected_conversation.user.email }}</strong><span>{{ selected_conversation.user.email }}{% if selected_conversation.user.phone %} · {{ selected_conversation.user.phone }}{% endif %}</span></div>
+                <span class="support-thread-status support-thread-status-{{ selected_conversation.status }}" data-thread-status>{{ selected_conversation.get_status_display }}</span>
+                {% if selected_conversation.status != 'closed' %}<form method="post" action="{% url 'support:close' selected_conversation.pk %}">{% csrf_token %}<button type="submit">Đóng cuộc trò chuyện</button></form>{% endif %}
+            </header>
+            <div class="support-case-context"{% if not context_case and not context_feedback %} hidden{% endif %}>
+                {% if context_feedback %}
+                    <span aria-hidden="true">✦</span>
+                    <div><strong>Đang trả lời góp ý #{{ context_feedback.pk }}</strong><small>{{ context_feedback.get_category_display }} · {{ context_feedback.message|truncatechars:100 }}</small></div>
+                    <a href="{% url 'admin:rescue_communityfeedback_change' context_feedback.pk %}">Xem góp ý ↗</a>
+                {% elif context_case %}
+                    <span aria-hidden="true">🐾</span>
+                    <div><strong>Đang trao đổi về ca #{{ context_case.pk }}</strong><small>{{ context_case.title }} · {{ context_case.address|truncatechars:70 }}</small></div>
+                    <a href="{% url 'admin:rescue_rescuecase_change' context_case.pk %}">Xem ca cứu hộ ↗</a>
+                {% endif %}
+            </div>
+            <div class="support-thread-messages" data-thread-messages>
+                {% for item in chat_messages %}
+                    <article class="support-thread-message support-thread-message-{{ item.sender_role }}">
+                        <span>{% if item.sender_role == 'admin' %}{{ item.sender.full_name|default:"Quản trị viên" }}{% else %}{{ item.sender.full_name|default:item.sender.email }}{% endif %}</span>
+                        {% if item.body %}<p>{{ item.body|linebreaksbr }}</p>{% endif %}
+                        {% if item.attachments.all %}
+                            <div class="support-thread-attachments">
+                                {% for attachment in item.attachments.all %}
+                                    {% if attachment.media_type == 'image' %}
+                                        <a href="{% url 'support:attachment' attachment.pk %}" target="_blank" rel="noopener" class="support-thread-attachment support-thread-attachment-image">
+                                            <img src="{% url 'support:attachment' attachment.pk %}" alt="{{ attachment.original_name }}" loading="lazy">
+                                        </a>
+                                    {% else %}
+                                        <div class="support-thread-attachment support-thread-attachment-video">
+                                            <video controls preload="metadata" playsinline aria-label="{{ attachment.original_name }}">
+                                                <source src="{% url 'support:attachment' attachment.pk %}" type="{{ attachment.content_type }}">
+                                            </video>
+                                            <small>{{ attachment.original_name }}</small>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <time>{{ item.created_at|date:"H:i, d/m/Y" }}</time>
+                    </article>
+                {% empty %}<div class="support-inbox-empty"><p>Chưa có tin nhắn.</p></div>{% endfor %}
+            </div>
+            {% if selected_conversation.status != 'closed' %}
+                <form class="support-admin-reply" method="post" enctype="multipart/form-data" action="{% url 'support:admin-reply' selected_conversation.pk %}" data-admin-reply-form>
+                    {% csrf_token %}
+                    <label for="id_support_reply">Trả lời với tư cách quản trị viên</label>
+                    <textarea id="id_support_reply" name="body" rows="3" maxlength="2000" placeholder="Nhập câu trả lời hoặc gửi ảnh/video...">{{ draft_message }}</textarea>
+                    <div class="support-admin-attachment-preview" data-admin-attachment-preview hidden></div>
+                    <div>
+                        <div class="support-admin-file-control">
+                            <input id="id_support_attachments" name="attachments" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,.mov" multiple data-admin-file-input>
+                            <label for="id_support_attachments">＋ Thêm ảnh/video</label>
+                            <small>Tối đa 4 tệp · Ảnh 8 MB · Video 40 MB</small>
+                        </div>
+                        <button type="submit">Gửi trả lời</button>
+                    </div>
+                </form>
+            {% else %}
+                <div class="support-thread-closed">Cuộc trò chuyện đã đóng. Người dùng có thể bắt đầu cuộc trò chuyện mới khi cần.</div>
+            {% endif %}
+        {% else %}
+            <div class="support-thread-placeholder"><span>💬</span><h2>Chưa có tin nhắn hỗ trợ</h2><p>Các cuộc trò chuyện mới từ người dùng sẽ xuất hiện tại đây.</p></div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

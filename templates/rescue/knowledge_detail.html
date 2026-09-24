@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ article.title }} · PawRescue{% endblock %}
+
+{% block content %}
+<article class="knowledge-detail">
+    <header class="knowledge-detail-header container narrow-container">
+        <a class="back-link" href="{% url 'rescue:knowledge-list' %}">← Cẩm nang cộng đồng</a>
+        <span class="knowledge-category">{{ article.get_category_display }}</span>
+        <h1>{{ article.title }}</h1>
+        <p>{{ article.excerpt }}</p>
+        <div class="knowledge-detail-meta"><span>Cập nhật {{ article.published_at|date:"d/m/Y" }}</span>{% if article.source_name %}<span>Tham khảo: {{ article.source_name }}</span>{% endif %}</div>
+    </header>
+    <div class="knowledge-detail-cover container">
+        {% if article.cover_image %}<img src="{{ article.cover_image.url }}" alt="Minh họa cho bài {{ article.title }}">{% elif article.static_image_path %}<img src="{% static article.static_image_path %}" alt="Minh họa cho bài {{ article.title }}">{% endif %}
+        {% if article.image_source_url %}<a href="{{ article.image_source_url }}" target="_blank" rel="noopener noreferrer">Ảnh: {{ article.image_credit }} ↗</a>{% endif %}
+    </div>
+    <div class="knowledge-detail-body container narrow-container">
+        <div class="knowledge-advisory"><strong>Lưu ý an toàn</strong><p>Nội dung chỉ nhằm hướng dẫn ban đầu, không thay thế chẩn đoán của bác sĩ thú y hoặc đội cứu hộ chuyên môn.</p></div>
+        <div class="article-copy">{{ article.body|linebreaks }}</div>
+        {% if article.source_url %}<div class="article-source"><span>Nguồn tham khảo</span><a href="{{ article.source_url }}" target="_blank" rel="noopener noreferrer">{{ article.source_name|default:article.source_url }} <span aria-hidden="true">↗</span></a></div>{% endif %}
+    </div>
+</article>
+
+{% if related_articles %}
+<section class="section container related-knowledge">
+    <div class="section-heading"><div><span class="eyebrow eyebrow-dark">Đọc tiếp</span><h2>Cùng chủ đề</h2></div></div>
+    <div class="knowledge-list-grid compact">
+        {% for related in related_articles %}
+            <article class="knowledge-list-card">
+                <a class="knowledge-list-media" href="{% url 'rescue:knowledge-detail' related.slug %}">{% if related.cover_image %}<img src="{{ related.cover_image.url }}" alt="" loading="lazy">{% elif related.static_image_path %}<img src="{% static related.static_image_path %}" alt="" loading="lazy">{% endif %}</a>
+                <div><span class="knowledge-category">{{ related.get_category_display }}</span><h2><a href="{% url 'rescue:knowledge-detail' related.slug %}">{{ related.title }}</a></h2><p>{{ related.excerpt }}</p></div>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+{% endblock %}

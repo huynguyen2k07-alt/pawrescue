@@ -1,0 +1,28 @@
+<article class="case-card">
+    <a class="case-card-media" href="{% url 'rescue:case-detail' case.pk %}">
+        {% with images=case.images.all %}
+            {% if images %}
+                <img src="{{ images.0.image.url }}" alt="Ảnh của ca {{ case.title }}">
+            {% else %}
+                <span class="case-placeholder" aria-hidden="true">🐾</span>
+            {% endif %}
+        {% endwith %}
+        <span class="urgency urgency-{{ case.urgency }}">{{ case.get_urgency_display }}</span>
+    </a>
+    <div class="case-card-body">
+        <div class="case-card-meta">
+            <span>{{ case.get_animal_type_display }}</span>
+            <span>{{ case.reported_at|date:"d/m/Y" }}</span>
+        </div>
+        <h3><a href="{% url 'rescue:case-detail' case.pk %}">{{ case.title }}</a></h3>
+        <p class="case-address">{% if case.is_location_private %}Vị trí chính xác được bảo vệ{% else %}{{ case.address|truncatechars:72 }}{% endif %}</p>
+        <div class="case-card-footer">
+            <span class="status status-{{ case.status }}">{{ case.get_status_display }}</span>
+            {% if case.organization %}
+                <span class="organization-name">{{ case.organization.name|truncatechars:24 }}</span>
+            {% else %}
+                <span class="organization-name awaiting">Chờ tiếp nhận</span>
+            {% endif %}
+        </div>
+    </div>
+</article>

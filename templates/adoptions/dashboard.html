@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Quản lý nhận nuôi · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container">
+    <div class="section-heading">
+        <div><span class="eyebrow eyebrow-dark">Dành cho tổ chức</span><h1>Quản lý nhận nuôi</h1></div>
+        <a class="button button-primary" href="{% url 'adoptions:animal-create' %}">Đăng hồ sơ mới</a>
+    </div>
+
+    <div class="adoption-dashboard-summary">
+        <div><strong>{{ profiles|length }}</strong><span>Hồ sơ động vật</span></div>
+        <div><strong>{{ applications|length }}</strong><span>Đơn đang hiển thị</span></div>
+        <div><strong>{{ placements|length }}</strong><span>Đang theo dõi sau nhận nuôi</span></div>
+        <div><strong>{{ due_follow_ups }}</strong><span>Lịch kiểm tra đến hạn</span></div>
+    </div>
+
+    <section class="adoption-safety-dashboard">
+        <div class="section-heading compact-heading">
+            <div><span class="eyebrow eyebrow-dark">Bảo vệ sau bàn giao</span><h2>Hồ sơ đang theo dõi</h2></div>
+            <p>Mỗi hồ sơ được nhắc kiểm tra định kỳ; dấu hiệu mua bán sẽ khóa người nhận nuôi khỏi các đơn mới.</p>
+        </div>
+        <div class="placement-grid">
+            {% for placement in placements %}
+                <article class="panel placement-card placement-card-{{ placement.status }}">
+                    <header>
+                        <div><span class="placement-state placement-state-{{ placement.status }}">{{ placement.get_status_display }}</span><h3>{{ placement.animal.name }} → {{ placement.adopter.full_name|default:placement.adopter.email }}</h3></div>
+                        {% if placement.next_follow_up_on %}<time datetime="{{ placement.next_follow_up_on|date:'Y-m-d' }}">Kiểm tra {{ placement.next_follow_up_on|date:"d/m/Y" }}</time>{% endif %}
+                    </header>
+                    <div class="placement-facts"><span>{{ placement.organization.name }}</span><span>Bàn giao {{ placement.placed_at|date:"d/m/Y" }}</span><span>{{ placement.application.phone }}</span></div>
+                    <form class="follow-up-form" method="post" action="{% url 'adoptions:placement-follow-up' placement.pk %}">
+                        {% csrf_token %}
+                        <label>Hình thức liên hệ<select name="contact_method">{% for value, label in follow_up_contact_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+                        <label>Kết quả<select name="outcome">{% for value, label in follow_up_outcome_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+                        <label class="field-wide">Ghi chú<textarea name="notes" rows="3" required placeholder="Ghi lại tình trạng, trao đổi và bằng chứng..."></textarea></label>
+                        <button class="button button-primary button-small" type="submit">Lưu lần theo dõi</button>
+                    </form>
+                </article>
+            {% empty %}
+                <div class="empty-state compact-empty"><span>🛡️</span><h2>Chưa có hồ sơ sau bàn giao</h2><p>Hồ sơ sẽ tự xuất hiện khi một đơn được chấp thuận.</p></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="safety-report-dashboard">
+        <div class="section-heading compact-heading"><div><span class="eyebrow eyebrow-dark">Cảnh báo cộng đồng</span><h2>Báo cáo an toàn</h2></div></div>
+        <div class="safety-report-list">
+            {% for report in safety_reports %}
+                <article class="panel safety-report-card safety-report-card-{{ report.status }}">
+                    <header><div><span class="safety-report-status">{{ report.get_status_display }}</span><h3>{{ report.animal.name }} · {{ report.get_reason_display }}</h3></div><time>{{ report.submitted_at|date:"H:i, d/m/Y" }}</time></header>
+                    <p>{{ report.description|linebreaksbr }}</p>
+                    {% if report.evidence_url %}<a class="evidence-link" href="{{ report.evidence_url }}" target="_blank" rel="noopener noreferrer">Mở liên kết bằng chứng ↗</a>{% endif %}
+                    {% if report.status == 'pending' or report.status == 'reviewing' %}
+                        <form class="safety-review-form" method="post" action="{% url 'adoptions:safety-report-review' report.pk %}">
+                            {% csrf_token %}
+                            <label>Kết quả<select name="status">{% for value, label in safety_review_status_choices %}<option value="{{ value }}" {% if report.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+                            <label>Ghi chú<textarea name="review_note" rows="3" placeholder="Kết quả xác minh và biện pháp xử lý..."></textarea></label>
+                            <button class="button button-primary button-small" type="submit">Cập nhật báo cáo</button>
+                        </form>
+                    {% elif report.review_note %}<div class="review-note"><strong>Kết quả xử lý</strong><p>{{ report.review_note }}</p></div>{% endif %}
+                </article>
+            {% empty %}<div class="empty-state compact-empty"><span>✓</span><h2>Chưa có báo cáo cần xử lý</h2></div>{% endfor %}
+        </div>
+    </section>
+
+    <div class="section-heading compact-heading">
+        <h2>Đơn đăng ký</h2>
+        <form method="get"><label class="sr-only" for="id_application_status">Lọc trạng thái</label><select id="id_application_status" name="status" onchange="this.form.submit()"><option value="">Tất cả trạng thái</option>{% for value, label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></form>
+    </div>
+    <div class="review-grid">
+        {% for application in applications %}
+            <article class="panel review-card">
+                <header><div><span class="application-status application-status-{{ application.status }}">{{ application.get_status_display }}</span><h3>{{ application.applicant_name }} → {{ application.animal.name }}</h3></div><time>{{ application.submitted_at|date:"H:i, d/m/Y" }}</time></header>
+                <div class="review-facts"><p><span>Liên hệ</span><strong>{{ application.phone }}</strong></p><p><span>Nhà ở</span><strong>{{ application.get_housing_type_display }}</strong></p><p><span>Địa chỉ</span><strong>{{ application.address }}</strong></p><p><span>Trẻ em</span><strong>{% if application.has_children %}Có{% else %}Không{% endif %}</strong></p></div>
+                {% if application.other_pets %}<div class="review-answer"><strong>Vật nuôi hiện có</strong><p>{{ application.other_pets }}</p></div>{% endif %}
+                {% if application.pet_experience %}<div class="review-answer"><strong>Kinh nghiệm</strong><p>{{ application.pet_experience }}</p></div>{% endif %}
+                <div class="review-answer"><strong>Lý do nhận nuôi</strong><p>{{ application.reason }}</p></div>
+                <div class="pledge-review {% if application.has_safety_pledge %}pledge-complete{% else %}pledge-missing{% endif %}"><strong>{% if application.has_safety_pledge %}✓ Đã ký cam kết bảo vệ{% else %}! Chưa có cam kết đầy đủ{% endif %}</strong><span>Không mua bán · Hoàn trả cho tổ chức · Đồng ý theo dõi</span></div>
+                {% if application.status == 'pending' or application.status == 'reviewing' %}
+                    <form class="review-form" method="post" action="{% url 'adoptions:application-review' application.pk %}">
+                        {% csrf_token %}
+                        <label>Quyết định<select name="status">{% for value, label in review_status_choices %}<option value="{{ value }}" {% if application.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+                        <label>Ghi chú<textarea name="review_note" rows="3" placeholder="Phản hồi cho người đăng ký..."></textarea></label>
+                        <label class="checkbox-control identity-check"><input type="checkbox" name="identity_confirmed" value="1"><span>Đã đối chiếu danh tính và thông tin liên hệ</span></label>
+                        <button class="button button-primary button-small" type="submit">Cập nhật đơn</button>
+                    </form>
+                {% elif application.review_note %}<div class="review-note"><strong>Phản hồi đã gửi</strong><p>{{ application.review_note }}</p></div>{% endif %}
+            </article>
+        {% empty %}
+            <div class="empty-state compact-empty"><span>📭</span><h2>Chưa có đơn phù hợp bộ lọc</h2><p>Các đơn mới sẽ xuất hiện tại đây.</p></div>
+        {% endfor %}
+    </div>
+
+    <div class="section-heading compact-heading"><h2>Hồ sơ đang quản lý</h2></div>
+    <div class="managed-profile-list">
+        {% for animal in profiles %}
+            <a class="panel managed-profile" href="{% url 'adoptions:animal-detail' animal.pk %}"><span>{{ animal.name }}</span><small>{{ animal.organization.name }} · {{ animal.get_status_display }} · {{ animal.application_count }} đơn</small></a>
+        {% empty %}<div class="empty-state compact-empty"><span>🐾</span><h2>Chưa có hồ sơ nhận nuôi</h2></div>{% endfor %}
+    </div>
+</section>
+{% endblock %}

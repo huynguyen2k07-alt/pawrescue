@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Bảng điều phối · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow eyebrow-dark">Không gian tổ chức</span>
+            <h1>Bảng điều phối cứu hộ</h1>
+        </div>
+        <div class="heading-actions">
+            <a class="button button-ghost" href="{% url 'organizations:organization-create' %}">Đăng ký tổ chức</a>
+            {% if can_manage_organization_features %}
+                <a class="button button-ghost" href="{% url 'adoptions:dashboard' %}">Nhận nuôi</a>
+                <a class="button button-ghost" href="{% url 'donations:dashboard' %}">Quản lý quỹ</a>
+            {% endif %}
+            <a class="button button-primary" href="{% url 'rescue:case-list' %}?status=reported">Tìm ca đang chờ</a>
+        </div>
+    </div>
+
+    {% if organizations %}
+        <div class="organization-strip">
+            {% for organization in organizations %}
+                <a class="organization-card" href="{% url 'organizations:organization-detail' organization.pk %}">
+                    <span class="organization-mark" aria-hidden="true">{{ organization.name|slice:":1"|upper }}</span>
+                    <div>
+                        <h2>{{ organization.name }}</h2>
+                        <p>{{ organization.current_role }} · {{ organization.member_count }} thành viên</p>
+                        <p>{{ organization.active_case_count }} ca đang xử lý</p>
+                    </div>
+                    {% if organization.is_verified %}<span class="verified">Đã xác minh</span>{% endif %}
+                </a>
+            {% endfor %}
+        </div>
+
+        <div class="section-heading compact-heading">
+            <div>
+                <span class="eyebrow eyebrow-dark">Công việc hiện tại</span>
+                <h2>Các ca của tổ chức</h2>
+            </div>
+        </div>
+
+        {% if cases %}
+            <div class="case-grid">
+                {% for case in cases %}
+                    {% include "rescue/_case_card.html" with case=case %}
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state compact-empty">
+                <h3>Chưa có ca nào được tiếp nhận</h3>
+                <p>Mở danh sách ca đang chờ để bắt đầu hỗ trợ.</p>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="empty-state">
+            <span aria-hidden="true">🏠</span>
+            <h2>Bạn chưa thuộc tổ chức cứu hộ nào</h2>
+            <p>Bạn có thể đăng ký một tổ chức mới hoặc nhờ chủ tổ chức thêm bằng email.</p>
+            <a class="button button-primary" href="{% url 'organizations:organization-create' %}">Đăng ký tổ chức</a>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

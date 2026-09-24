@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}{{ organization.name }} · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container">
+    <a class="back-link" href="{% url 'organizations:dashboard' %}">← Quay lại bảng điều phối</a>
+
+    <header class="panel organization-profile-header">
+        <span class="organization-mark organization-mark-large" aria-hidden="true">{{ organization.name|slice:":1"|upper }}</span>
+        <div class="organization-profile-copy">
+            <div class="detail-badges">
+                {% if organization.is_verified %}
+                    <span class="verified">Đã xác minh</span>
+                {% else %}
+                    <span class="status status-reported">Chờ xác minh</span>
+                {% endif %}
+                {% if membership %}<span class="role-badge">{{ membership.get_role_display }}</span>{% endif %}
+            </div>
+            <h1>{{ organization.name }}</h1>
+            <p>{{ organization.description|default:"Tổ chức chưa cập nhật phần giới thiệu."|linebreaksbr }}</p>
+        </div>
+        {% if can_manage_members %}
+            <a class="button button-ghost" href="{% url 'organizations:organization-update' organization.pk %}">Sửa hồ sơ</a>
+        {% endif %}
+    </header>
+
+    <div class="organization-facts">
+        <div><span>Email</span><strong>{{ organization.email|default:"Chưa cập nhật" }}</strong></div>
+        <div><span>Điện thoại</span><strong>{{ organization.phone|default:"Chưa cập nhật" }}</strong></div>
+        <div><span>Khu vực hoạt động</span><strong>{{ organization.address|default:"Chưa cập nhật" }}</strong></div>
+        <div><span>Thành viên</span><strong>{{ memberships|length }} người</strong></div>
+    </div>
+
+    <div class="organization-management-grid">
+        <section class="panel member-panel">
+            <div class="panel-heading member-heading">
+                <div>
+                    <span class="eyebrow eyebrow-dark">Đội ngũ</span>
+                    <h2>Thành viên tổ chức</h2>
+                </div>
+                <span class="member-count">{{ memberships|length }} thành viên</span>
+            </div>
+
+            <div class="member-list">
+                {% for item in memberships %}
+                    <article class="member-row">
+                        <span class="avatar">{{ item.user.full_name|default:item.user.email|slice:":1"|upper }}</span>
+                        <div class="member-identity">
+                            <strong>{{ item.user.full_name|default:item.user.email }}</strong>
+                            <span>{{ item.user.email }}{% if item.user_id == user.id %} · Bạn{% endif %}</span>
+                        </div>
+                        {% if can_manage_members %}
+                            <form class="role-form" method="post" action="{% url 'organizations:member-change-role' organization.pk item.pk %}">
+                                {% csrf_token %}
+                                <label class="sr-only" for="role-{{ item.pk }}">Vai trò của {{ item.user.email }}</label>
+                                <select id="role-{{ item.pk }}" name="role">
+                                    {% for value, label in role_choices %}
+                                        <option value="{{ value }}" {% if item.role == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button class="button button-ghost button-small" type="submit">Lưu</button>
+                            </form>
+                            <form method="post" action="{% url 'organizations:member-remove' organization.pk item.pk %}">
+                                {% csrf_token %}
+                                <button class="member-remove" type="submit" aria-label="Gỡ {{ item.user.email }} khỏi tổ chức">Gỡ</button>
+                            </form>
+                        {% else %}
+                            <span class="role-badge">{{ item.get_role_display }}</span>
+                        {% endif %}
+                    </article>
+                {% empty %}
+                    <p class="muted">Tổ chức chưa có thành viên hoạt động.</p>
+                {% endfor %}
+            </div>
+        </section>
+
+        {% if can_manage_members %}
+            <aside class="panel add-member-panel">
+                <span class="eyebrow eyebrow-dark">Mở rộng đội ngũ</span>
+                <h2>Thêm thành viên</h2>
+                <p>Người được thêm cần đăng ký tài khoản PawRescue trước.</p>
+                <form method="post" action="{% url 'organizations:member-add' organization.pk %}">
+                    {% csrf_token %}
+                    {% for field in add_member_form %}
+                        <div class="field">
+                            {{ field.label_tag }}
+                            {{ field }}
+                        </div>
+                    {% endfor %}
+                    <button class="button button-primary button-block" type="submit">Thêm vào tổ chức</button>
+                </form>
+            </aside>
+        {% endif %}
+    </div>
+
+    <div class="section-heading compact-heading">
+        <div>
+            <span class="eyebrow eyebrow-dark">Hoạt động cứu hộ</span>
+            <h2>Các ca của {{ organization.name }}</h2>
+        </div>
+        <a class="button button-ghost" href="{% url 'rescue:case-list' %}?status=reported">Tìm ca đang chờ</a>
+    </div>
+
+    {% if cases %}
+        <div class="case-grid">
+            {% for case in cases %}
+                {% include "rescue/_case_card.html" with case=case %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state compact-empty">
+            <h3>Chưa có ca cứu hộ nào</h3>
+            <p>Chủ tổ chức hoặc điều phối viên có thể tiếp nhận ca từ danh sách cộng đồng.</p>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

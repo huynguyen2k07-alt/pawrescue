@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_create %}Đăng hồ sơ nhận nuôi{% else %}Sửa hồ sơ {{ animal.name }}{% endif %} · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container narrow-container">
+    <div class="page-intro">
+        <span class="eyebrow eyebrow-dark">Quản lý nhận nuôi</span>
+        <h1>{% if is_create %}Đăng hồ sơ nhận nuôi{% else %}Cập nhật hồ sơ {{ animal.name }}{% endif %}</h1>
+        <p>Cung cấp thông tin rõ ràng để gia đình phù hợp hiểu và chuẩn bị tốt trước khi đăng ký.</p>
+    </div>
+    <form class="panel form-panel" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid adoption-profile-form">
+            {% for field in form %}
+                <div class="field{% if field.name == 'description' or field.name == 'temperament' or field.name == 'health_status' or field.name == 'special_needs' or field.name == 'images' %} field-wide{% endif %}{% if field.name == 'is_neutered' %} checkbox-field{% endif %}">
+                    {% if field.name == 'is_neutered' %}
+                        <label class="checkbox-control">{{ field }}<span>{{ field.label }}</span></label>
+                    {% else %}
+                        {{ field.label_tag }}{{ field }}
+                    {% endif %}
+                    {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                    {% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+        <div class="form-actions">
+            <a class="button button-ghost" href="{% if animal %}{% url 'adoptions:animal-detail' animal.pk %}{% else %}{% url 'adoptions:animal-list' %}{% endif %}">Hủy</a>
+            <button class="button button-primary" type="submit">{% if is_create %}Đăng hồ sơ{% else %}Lưu thay đổi{% endif %}</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

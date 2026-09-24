@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_create %}Đăng ký tổ chức{% else %}Cập nhật tổ chức{% endif %} · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container narrow-container">
+    <a class="back-link" href="{% if organization %}{% url 'organizations:organization-detail' organization.pk %}{% else %}{% url 'organizations:dashboard' %}{% endif %}">← Quay lại</a>
+    <div class="page-intro">
+        <span class="eyebrow eyebrow-dark">{% if is_create %}Tham gia mạng lưới{% else %}Hồ sơ tổ chức{% endif %}</span>
+        <h1>{% if is_create %}Đăng ký tổ chức cứu hộ{% else %}Cập nhật {{ organization.name }}{% endif %}</h1>
+        <p>{% if is_create %}Sau khi tạo, bạn sẽ trở thành chủ tổ chức và có thể thêm đội ngũ của mình.{% else %}Thông tin rõ ràng giúp cộng đồng dễ dàng nhận biết và liên hệ với tổ chức.{% endif %}</p>
+    </div>
+
+    <form class="panel form-panel" method="post" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+            {% for field in form %}
+                <div class="field {% if field.name == 'name' or field.name == 'description' or field.name == 'address' %}field-wide{% endif %}">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span aria-hidden="true">*</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                    {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+        <div class="form-actions">
+            <a class="button button-ghost" href="{% if organization %}{% url 'organizations:organization-detail' organization.pk %}{% else %}{% url 'organizations:dashboard' %}{% endif %}">Hủy</a>
+            <button class="button button-primary" type="submit">{% if is_create %}Tạo tổ chức{% else %}Lưu thay đổi{% endif %}</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Quản lý quỹ cứu hộ · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container">
+    <div class="section-heading"><div><span class="eyebrow eyebrow-dark">Dành cho tổ chức</span><h1>Quản lý quỹ cứu hộ</h1></div><a class="button button-primary" href="{% url 'donations:campaign-create' %}">Tạo chiến dịch</a></div>
+    <div class="fund-dashboard-summary"><div><span>Đã xác nhận</span><strong>{{ confirmed_total|floatformat:"0g" }} ₫</strong></div><div><span>Tổng chi phí</span><strong>{{ expense_total|floatformat:"0g" }} ₫</strong></div><div><span>Số dư</span><strong>{{ balance_total|floatformat:"0g" }} ₫</strong></div></div>
+
+    <div class="section-heading compact-heading"><h2>Đóng góp chờ xử lý</h2><form method="get"><label class="sr-only" for="id_donation_status">Lọc trạng thái</label><select id="id_donation_status" name="status" onchange="this.form.submit()"><option value="">Tất cả trạng thái</option>{% for value, label in donation_status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></form></div>
+    <div class="donation-review-list">
+        {% for donation in donations %}
+            <article class="panel donation-review-card">
+                <header><div><span class="donation-state donation-state-{{ donation.status }}">{{ donation.get_status_display }}</span><h3>{{ donation.donor_name }}</h3><p>{{ donation.campaign.title }}</p></div><strong>{{ donation.amount|floatformat:"0g" }} ₫</strong></header>
+                <div class="donation-review-facts"><span>{{ donation.get_method_display }}</span><span>{{ donation.donor_email }}</span><span>{{ donation.reference_code|default:"Không có mã giao dịch" }}</span><time>{{ donation.submitted_at|date:"H:i, d/m/Y" }}</time></div>
+                {% if donation.message %}<p class="donation-message">“{{ donation.message }}”</p>{% endif %}
+                {% if donation.proof %}<a class="proof-link" href="{{ donation.proof.url }}" target="_blank" rel="noopener">Xem minh chứng chuyển khoản →</a>{% endif %}
+                {% if donation.status == 'pending' %}
+                    <form class="donation-review-form" method="post" action="{% url 'donations:donation-review' donation.pk %}">{% csrf_token %}<select name="status">{% for value, label in review_status_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select><button class="button button-primary button-small" type="submit">Cập nhật</button></form>
+                {% endif %}
+            </article>
+        {% empty %}<div class="empty-state compact-empty"><span>✅</span><h2>Không có đóng góp cần hiển thị</h2></div>{% endfor %}
+    </div>
+
+    <div class="section-heading compact-heading"><h2>Chiến dịch</h2></div>
+    <div class="managed-campaign-list">
+        {% for campaign in campaigns %}<article class="panel managed-campaign"><div><span class="campaign-status campaign-status-{{ campaign.status }}">{{ campaign.get_status_display }}</span><h3><a href="{% url 'donations:campaign-detail' campaign.pk %}">{{ campaign.title }}</a></h3><p>{{ campaign.organization.name }}</p></div><div class="managed-campaign-money"><strong>{{ campaign.confirmed_amount|floatformat:"0g" }} ₫</strong><span>đã chi {{ campaign.expense_amount|floatformat:"0g" }} ₫</span><a href="{% url 'donations:expense-create' campaign.pk %}">+ Ghi khoản chi</a></div></article>{% empty %}<div class="empty-state compact-empty"><span>💚</span><h2>Chưa có chiến dịch gây quỹ</h2></div>{% endfor %}
+    </div>
+</section>
+{% endblock %}

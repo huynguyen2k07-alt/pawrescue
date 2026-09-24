@@ -1,0 +1,60 @@
+{% extends "admin/change_list.html" %}
+
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div class="paw-feedback-workspace">
+    <header class="paw-feedback-heading">
+        <div>
+            <span class="paw-admin-eyebrow">Lắng nghe cộng đồng</span>
+            <h1>Hộp thư góp ý</h1>
+            <p>Đọc nội dung, trả lời qua Gmail hoặc mở chat với thành viên PawRescue.</p>
+        </div>
+        <span>{{ feedback_items|length }} phản hồi gần nhất</span>
+    </header>
+
+    <div class="paw-feedback-metrics">
+        <div class="is-new"><span>Chưa xem</span><strong>{{ feedback_counts.new }}</strong></div>
+        <div><span>Đã xem</span><strong>{{ feedback_counts.reviewed }}</strong></div>
+        <div class="is-closed"><span>Đã xử lý</span><strong>{{ feedback_counts.closed }}</strong></div>
+    </div>
+
+    <section class="paw-feedback-inbox" aria-label="Danh sách góp ý gần nhất">
+        {% for feedback in feedback_items %}
+            <article class="paw-feedback-card paw-feedback-card-{{ feedback.status }}">
+                <div class="paw-feedback-avatar" aria-hidden="true">{{ feedback.name|slice:":1"|upper }}</div>
+                <div class="paw-feedback-copy">
+                    <div class="paw-feedback-meta">
+                        <span>{{ feedback.get_category_display }}</span>
+                        <time>{{ feedback.submitted_at|date:"H:i, d/m/Y" }}</time>
+                    </div>
+                    <h2><a href="{% url 'admin:rescue_communityfeedback_change' feedback.pk %}">{{ feedback.name }}</a></h2>
+                    <a class="paw-feedback-email" href="mailto:{{ feedback.email }}">{{ feedback.email }}</a>
+                    <p>{{ feedback.message|truncatechars:360 }}</p>
+                </div>
+                <div class="paw-feedback-side">
+                    <span class="paw-feedback-status paw-feedback-status-{{ feedback.status }}">{{ feedback.get_status_display }}</span>
+                    <a class="is-view" href="{% url 'admin:rescue_communityfeedback_change' feedback.pk %}">Xem đầy đủ</a>
+                    <a class="is-gmail" href="{{ feedback.gmail_reply_url }}" target="_blank" rel="noopener noreferrer">Trả lời Gmail ↗</a>
+                    {% if feedback.user_id %}
+                        <form method="post" action="{% url 'admin:rescue_communityfeedback_open_chat' feedback.pk %}">{% csrf_token %}<button class="is-chat" type="submit">Mở chat nội bộ</button></form>
+                    {% endif %}
+                    {% if feedback.status == 'new' %}
+                        <form method="post" action="{% url 'admin:rescue_communityfeedback_quick_status' feedback.pk 'reviewed' %}">{% csrf_token %}<button type="submit">Đánh dấu đã xem</button></form>
+                    {% endif %}
+                    {% if feedback.status != 'closed' %}
+                        <form method="post" action="{% url 'admin:rescue_communityfeedback_quick_status' feedback.pk 'closed' %}">{% csrf_token %}<button type="submit">Đã xử lý</button></form>
+                    {% endif %}
+                </div>
+            </article>
+        {% empty %}
+            <div class="paw-feedback-empty"><span>✓</span><strong>Chưa có góp ý nào</strong><p>Phản hồi gửi từ trang chủ sẽ xuất hiện tại đây.</p></div>
+        {% endfor %}
+    </section>
+</div>
+
+<details class="paw-rescue-data"{% if request.GET %} open{% endif %}>
+    <summary>Tìm kiếm, lọc và dữ liệu đầy đủ <span>⌄</span></summary>
+    {{ block.super }}
+</details>
+{% endblock %}

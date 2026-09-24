@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Báo cáo an toàn cho {{ animal.name }} · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container narrow-container">
+    <a class="back-link" href="{% url 'adoptions:animal-detail' animal.pk %}">← Quay lại hồ sơ {{ animal.name }}</a>
+    <div class="page-intro safety-report-intro">
+        <span class="eyebrow eyebrow-dark">Kênh báo cáo bảo mật</span>
+        <h1>Báo cáo vấn đề liên quan đến {{ animal.name }}</h1>
+        <p>Hãy báo ngay nếu bạn thấy động vật bị rao bán, tự ý chuyển nhượng, bỏ bê hoặc ngược đãi. Thông tin người báo chỉ được dùng để xác minh nội bộ.</p>
+    </div>
+    <div class="safety-report-layout">
+        <form class="panel form-panel" method="post">
+            {% csrf_token %}
+            {% for field in form %}
+                <div class="field">
+                    {{ field.label_tag }}{{ field }}
+                    {% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+                </div>
+            {% endfor %}
+            <div class="form-actions">
+                <a class="button button-ghost" href="{% url 'adoptions:animal-detail' animal.pk %}">Hủy</a>
+                <button class="button button-primary" type="submit">Gửi báo cáo bảo mật</button>
+            </div>
+        </form>
+        <aside class="panel safety-process-card">
+            <span class="eyebrow eyebrow-dark">Cách xử lý</span>
+            <ol><li>Tổ chức tiếp nhận báo cáo.</li><li>Đối chiếu bằng chứng và liên hệ các bên.</li><li>Đánh dấu hồ sơ, thu hồi động vật khi cần.</li><li>Hạn chế tài khoản vi phạm gửi đơn mới.</li></ol>
+            <p>Nếu động vật đang gặp nguy hiểm ngay lập tức, hãy liên hệ cơ quan chức năng tại địa phương.</p>
+        </aside>
+    </div>
+</section>
+{% endblock %}

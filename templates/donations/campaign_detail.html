@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}{{ campaign.title }} · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container">
+    <a class="back-link" href="{% url 'donations:campaign-list' %}">← Quay lại các chiến dịch</a>
+    <div class="campaign-detail-layout">
+        <main class="campaign-detail-main">
+            <article class="panel campaign-detail-panel">
+                {% if campaign.cover_image %}<img class="campaign-cover" src="{{ campaign.cover_image.url }}" alt="{{ campaign.title }}">{% endif %}
+                <div class="campaign-detail-heading">
+                    <span class="campaign-status campaign-status-{{ campaign.status }}">{{ campaign.get_status_display }}</span>
+                    <h1>{{ campaign.title }}</h1>
+                    <p>{{ campaign.organization.name }}{% if campaign.starts_at %} · bắt đầu {{ campaign.starts_at|date:"d/m/Y" }}{% endif %}</p>
+                </div>
+                <div class="fund-progress fund-progress-large"><span style="width: {{ campaign.progress_percent }}%"></span></div>
+                <div class="financial-summary-grid">
+                    <div><span>Đã xác nhận</span><strong>{{ campaign.confirmed_amount|floatformat:"0g" }} ₫</strong></div>
+                    <div><span>Mục tiêu</span><strong>{{ campaign.target_amount|floatformat:"0g" }} ₫</strong></div>
+                    <div><span>Đã chi</span><strong>{{ campaign.expense_amount|floatformat:"0g" }} ₫</strong></div>
+                    <div><span>Số dư minh bạch</span><strong>{{ campaign.balance_amount|floatformat:"0g" }} ₫</strong></div>
+                </div>
+                <section class="detail-section"><h2>Mục tiêu chiến dịch</h2><p>{{ campaign.description|linebreaksbr }}</p></section>
+                {% if campaign.rescue_case %}<a class="rescue-origin-link" href="{% url 'rescue:case-detail' campaign.rescue_case_id %}">Xem ca cứu hộ liên quan →</a>{% endif %}
+            </article>
+
+            <section class="panel campaign-ledger">
+                <div class="panel-heading"><span class="eyebrow eyebrow-dark">Công khai sử dụng quỹ</span><h2>Sổ chi phí</h2></div>
+                <div class="ledger-list">
+                    {% for expense in expenses %}
+                        <article class="ledger-row">
+                            <div><span class="expense-category">{{ expense.get_category_display }}</span><strong>{{ expense.description }}</strong><small>{{ expense.spent_at|date:"d/m/Y" }}</small></div>
+                            <div class="ledger-amount">− {{ expense.amount|floatformat:"0g" }} ₫
+                                {% if expense.receipt %}{% if expense.is_receipt_public or can_manage %}<a href="{{ expense.receipt.url }}" target="_blank" rel="noopener">Xem biên lai</a>{% endif %}{% endif %}
+                            </div>
+                        </article>
+                    {% empty %}<div class="empty-state compact-empty"><span>🧾</span><h3>Chưa phát sinh chi phí</h3><p>Các khoản chi sẽ được công khai tại đây.</p></div>{% endfor %}
+                </div>
+            </section>
+
+            <section class="panel campaign-ledger">
+                <div class="panel-heading"><span class="eyebrow eyebrow-dark">Cộng đồng đồng hành</span><h2>Đóng góp đã xác nhận</h2></div>
+                <div class="donor-list">
+                    {% for donation in donations %}
+                        <article><span class="donor-avatar">💚</span><div><strong>{% if donation.is_anonymous %}Nhà hảo tâm ẩn danh{% else %}{{ donation.donor_name }}{% endif %}</strong><p>{{ donation.message|default:"Cảm ơn bạn đã chung tay cứu hộ." }}</p></div><span>{{ donation.amount|floatformat:"0g" }} ₫</span></article>
+                    {% empty %}<div class="empty-state compact-empty"><span>🤝</span><h3>Đang chờ những đóng góp đầu tiên</h3></div>{% endfor %}
+                </div>
+            </section>
+        </main>
+
+        <aside class="campaign-detail-sidebar">
+            {% if can_manage %}
+                <section class="panel action-panel">
+                    <h2>Quản lý chiến dịch</h2>
+                    <a class="button button-primary button-block" href="{% url 'donations:campaign-update' campaign.pk %}">Chỉnh sửa chiến dịch</a>
+                    <a class="button button-ghost button-block" href="{% url 'donations:expense-create' campaign.pk %}">Ghi khoản chi</a>
+                    <a class="button button-ghost button-block" href="{% url 'donations:dashboard' %}">Xác nhận đóng góp</a>
+                </section>
+            {% endif %}
+
+            {% if campaign.bank_account_number %}
+                <section class="panel bank-card">
+                    <span class="eyebrow eyebrow-dark">Thông tin chuyển khoản</span>
+                    <h2>{{ campaign.bank_name|default:"Tài khoản nhận ủng hộ" }}</h2>
+                    <dl><div><dt>Chủ tài khoản</dt><dd>{{ campaign.bank_account_name }}</dd></div><div><dt>Số tài khoản</dt><dd>{{ campaign.bank_account_number }}</dd></div><div><dt>Nội dung</dt><dd>{{ campaign.transfer_content|default:campaign.title }}</dd></div></dl>
+                </section>
+            {% endif %}
+
+            {% if can_donate %}
+                {% if user.is_authenticated %}
+                    <section class="panel donation-form-panel">
+                        <span class="eyebrow">Ghi nhận đóng góp</span>
+                        <h2>Tôi đã ủng hộ</h2>
+                        <p>Điền thông tin sau khi chuyển khoản. Tổ chức sẽ đối chiếu và xác nhận trước khi công khai.</p>
+                        <form method="post" enctype="multipart/form-data" action="{% url 'donations:donation-create' campaign.pk %}">
+                            {% csrf_token %}
+                            {% for field in donation_form %}
+                                <div class="field{% if field.name == 'is_anonymous' %} checkbox-field{% endif %}">
+                                    {% if field.name == 'is_anonymous' %}<label class="checkbox-control">{{ field }}<span>{{ field.label }}</span></label>{% else %}{{ field.label_tag }}{{ field }}{% endif %}
+                                </div>
+                            {% endfor %}
+                            <button class="button button-accent button-block" type="submit">Gửi xác nhận đóng góp</button>
+                        </form>
+                    </section>
+                {% else %}
+                    <section class="panel donation-login-card"><h2>Bạn muốn chung tay?</h2><p>Đăng nhập để gửi xác nhận đóng góp và theo dõi trạng thái.</p><a class="button button-accent button-block" href="{% url 'accounts:login' %}?next={{ request.path|urlencode }}">Đăng nhập để ủng hộ</a></section>
+                {% endif %}
+            {% endif %}
+
+            <p class="donation-safety-note">PawRescue hiện ghi nhận chuyển khoản thủ công và không xử lý thanh toán trực tuyến. Chỉ khoản đã được tổ chức xác nhận mới tính vào tổng công khai.</p>
+        </aside>
+    </div>
+</section>
+{% endblock %}

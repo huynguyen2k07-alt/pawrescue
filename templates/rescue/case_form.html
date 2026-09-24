@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Báo ca cứu hộ · PawRescue{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+
+{% block content %}
+<section class="section container narrow-container">
+    <div class="page-intro">
+        <span class="eyebrow eyebrow-dark">Gửi tin từ hiện trường</span>
+        <h1>Báo một ca cần cứu hộ</h1>
+        <p>Thông tin cụ thể và ảnh rõ ràng sẽ giúp đội cứu hộ phản ứng nhanh hơn. PawRescue hiện tiếp nhận ca trong phạm vi Đà Nẵng.</p>
+    </div>
+
+    <form class="panel form-panel" method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="form-grid">
+            {% for field in form %}
+                {% if field.name == 'latitude' %}
+                    <div class="field field-wide location-picker-field">
+                        <div class="location-picker-heading">
+                            <div>
+                                <label>Chọn vị trí trên bản đồ</label>
+                                <small>Bấm lên bản đồ hoặc dùng vị trí hiện tại trong phạm vi Đà Nẵng.</small>
+                            </div>
+                            <button class="button button-ghost button-small" id="use-current-location" type="button">Dùng vị trí hiện tại</button>
+                        </div>
+                        <div
+                            id="location-picker-map"
+                            class="map map-picker"
+                            data-map-picker
+                            data-latitude="{{ form.latitude.value|default_if_none:'' }}"
+                            data-longitude="{{ form.longitude.value|default_if_none:'' }}"
+                            data-maptiler-key="{{ maptiler_api_key }}"
+                        ></div>
+                        <p class="location-status" id="location-status" aria-live="polite">Chưa chọn tọa độ.</p>
+                    </div>
+                {% endif %}
+                <div class="field {% if field.name == 'description' or field.name == 'address' or field.name == 'images' or field.name == 'title' or field.name == 'is_location_private' %}field-wide{% endif %} {% if field.name == 'latitude' or field.name == 'longitude' %}coordinate-field{% endif %}">
+                    {% if field.name == 'is_location_private' %}
+                        <label class="checkbox-control" for="{{ field.id_for_label }}">
+                            {{ field }}
+                            <span>{{ field.label }}</span>
+                        </label>
+                    {% else %}
+                        <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span aria-hidden="true">*</span>{% endif %}</label>
+                        {{ field }}
+                    {% endif %}
+                    {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                    {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="form-actions">
+            <a class="button button-ghost" href="{% url 'rescue:case-list' %}">Hủy</a>
+            <button class="button button-accent" type="submit">Gửi tin báo</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{% static 'js/maps.js' %}"></script>
+{% endblock %}

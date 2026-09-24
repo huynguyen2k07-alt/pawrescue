@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Đóng góp của tôi · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container narrow-container">
+    <div class="section-heading"><div><span class="eyebrow eyebrow-dark">Cùng nhau tạo thay đổi</span><h1>Đóng góp của tôi</h1></div><a class="button button-primary button-small" href="{% url 'donations:campaign-list' %}">Xem chiến dịch</a></div>
+    <div class="my-donation-list">
+        {% for donation in donations %}
+            <article class="panel my-donation-card">
+                <div><span class="donation-state donation-state-{{ donation.status }}">{{ donation.get_status_display }}</span><h2><a href="{% url 'donations:campaign-detail' donation.campaign_id %}">{{ donation.campaign.title }}</a></h2><p>{{ donation.campaign.organization.name }} · {{ donation.submitted_at|date:"H:i, d/m/Y" }}</p></div>
+                <strong>{{ donation.amount|floatformat:"0g" }} ₫</strong>
+            </article>
+        {% empty %}<div class="empty-state"><span>💝</span><h2>Bạn chưa ghi nhận đóng góp nào</h2><p>Khám phá các chiến dịch đang cần cộng đồng chung tay.</p><a class="button button-primary" href="{% url 'donations:campaign-list' %}">Xem chiến dịch</a></div>{% endfor %}
+    </div>
+</section>
+{% endblock %}

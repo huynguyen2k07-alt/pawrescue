@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Bản đồ cứu hộ · PawRescue{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+
+{% block content %}
+<section class="section container map-page">
+    <div class="section-heading map-page-heading">
+        <div>
+            <span class="eyebrow eyebrow-dark">Theo dõi theo khu vực</span>
+            <h1>Bản đồ cứu hộ Đà Nẵng</h1>
+            <p>Tìm các ca đang cần hỗ trợ trong phạm vi Đà Nẵng và ưu tiên những vị trí gần bạn.</p>
+        </div>
+        <a class="button button-accent" href="{% url 'rescue:case-create' %}">Báo ca mới</a>
+    </div>
+
+    <div class="map-toolbar">
+        <div>
+            <label for="map-animal-filter">Loại động vật</label>
+            <select id="map-animal-filter">
+                <option value="">Tất cả</option>
+                {% for value, label in animal_type_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="map-status-filter">Trạng thái</label>
+            <select id="map-status-filter">
+                <option value="">Tất cả</option>
+                {% for value, label in status_choices %}
+                    {% if value != 'rescued' and value != 'closed' and value != 'cancelled' %}<option value="{{ value }}">{{ label }}</option>{% endif %}
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="nearby-radius">Bán kính gần tôi</label>
+            <select id="nearby-radius">
+                <option value="5">5 km</option>
+                <option value="10" selected>10 km</option>
+                <option value="25">25 km</option>
+            </select>
+        </div>
+        <button class="button button-primary" id="find-nearby" type="button">Tìm ca gần tôi</button>
+        <button class="clear-map-filter" id="clear-nearby" type="button" hidden>Xóa vị trí của tôi</button>
+    </div>
+
+    <p class="map-feedback" id="map-feedback" aria-live="polite">Đang hiển thị {{ map_cases|length }} ca có vị trí.</p>
+
+    <div class="case-map-layout">
+        <div class="map aggregate-map" data-cases-map data-maptiler-key="{{ maptiler_api_key }}"></div>
+        <aside class="map-case-sidebar" aria-label="Danh sách ca trên bản đồ">
+            <div class="map-case-list" id="map-case-list">
+                {% for case in map_cases %}
+                    <article
+                        class="map-case-item"
+                        data-map-card
+                        data-case-id="{{ case.id }}"
+                        data-animal-type="{{ case.animal_type_value }}"
+                        data-status="{{ case.status_value }}"
+                    >
+                        {% if case.image_url %}
+                            <img src="{{ case.image_url }}" alt="Ảnh của ca {{ case.title }}">
+                        {% else %}
+                            <span class="map-case-placeholder" aria-hidden="true">🐾</span>
+                        {% endif %}
+                        <div>
+                            <div class="map-case-labels">
+                                <span>{{ case.animal_type }}</span>
+                                <span class="urgency urgency-{{ case.urgency_value }}">{{ case.urgency }}</span>
+                            </div>
+                            <h2>{{ case.title }}</h2>
+                            <p>{{ case.address }}</p>
+                            <small data-distance></small>
+                            <div class="map-case-actions">
+                                <button type="button" data-focus-case="{{ case.id }}">Xem trên bản đồ</button>
+                                <a href="{{ case.detail_url }}">Chi tiết →</a>
+                            </div>
+                        </div>
+                    </article>
+                {% empty %}
+                    <div class="empty-map-list">
+                        <span aria-hidden="true">📍</span>
+                        <p>Chưa có ca đang hoạt động nào cung cấp tọa độ.</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </aside>
+    </div>
+
+    {{ map_cases|json_script:"map-case-data" }}
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{% static 'js/maps.js' %}"></script>
+{% endblock %}
