@@ -7,6 +7,10 @@ from django.db.models import Sum
 
 from organizations.models import RescueOrganization
 from rescue.models import RescueCase
+from rescue.uploads import sanitize_model_image
+
+from .storage import private_donation_storage
+from .uploads import sanitize_model_receipt
 
 
 class FundraisingCampaign(models.Model):
@@ -70,6 +74,10 @@ class FundraisingCampaign(models.Model):
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        sanitize_model_image(self, "cover_image")
+        return super().save(*args, **kwargs)
 
     @property
     def confirmed_amount(self):
@@ -135,6 +143,7 @@ class Donation(models.Model):
     )
     reference_code = models.CharField(max_length=120, blank=True)
     proof = models.FileField(
+        storage=private_donation_storage,
         upload_to="donation_proofs/%Y/%m/",
         blank=True,
         validators=(
@@ -166,6 +175,10 @@ class Donation(models.Model):
     def __str__(self):
         return f"{self.donor_name} - {self.amount} - {self.campaign}"
 
+    def save(self, *args, **kwargs):
+        sanitize_model_receipt(self, "proof")
+        return super().save(*args, **kwargs)
+
 
 class CampaignExpense(models.Model):
     class Category(models.TextChoices):
@@ -191,6 +204,7 @@ class CampaignExpense(models.Model):
     description = models.TextField()
     spent_at = models.DateField()
     receipt = models.FileField(
+        storage=private_donation_storage,
         upload_to="campaign_receipts/%Y/%m/",
         blank=True,
         validators=(
@@ -214,3 +228,7 @@ class CampaignExpense(models.Model):
 
     def __str__(self):
         return f"{self.get_category_display()} - {self.amount}"
+
+    def save(self, *args, **kwargs):
+        sanitize_model_receipt(self, "receipt")
+        return super().save(*args, **kwargs)

@@ -1,3 +1,4 @@
+import base64
 from datetime import timedelta
 from tempfile import TemporaryDirectory
 
@@ -18,6 +19,11 @@ from .models import (
     AdoptionSafetyReport,
     AnimalProfile,
     AnimalProfileImage,
+)
+
+
+PNG_1X1 = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 )
 
 
@@ -54,6 +60,7 @@ class AdoptionWorkflowTests(TestCase):
             name="Happy Tails Rescue",
             address="Ho Chi Minh City",
             created_by=self.manager,
+            is_verified=True,
         )
         OrganizationMembership.objects.create(
             organization=self.organization,
@@ -163,9 +170,9 @@ class AdoptionWorkflowTests(TestCase):
     def test_manager_can_create_profile_with_image_from_rescue_case(self):
         self.client.force_login(self.manager)
         image = SimpleUploadedFile(
-            "adoption-cat.jpg",
-            b"small-test-image",
-            content_type="image/jpeg",
+            "adoption-cat.png",
+            PNG_1X1,
+            content_type="image/png",
         )
         data = {
             "organization": self.organization.pk,
@@ -202,6 +209,44 @@ class AdoptionWorkflowTests(TestCase):
         response = self.client.get(reverse("adoptions:animal-create"))
 
         self.assertEqual(response.status_code, 403)
+
+    def test_unverified_organization_cannot_publish_or_manage_profiles(self):
+        unverified = RescueOrganization.objects.create(
+            name="Pending Rescue Team",
+            created_by=self.manager,
+        )
+        OrganizationMembership.objects.create(
+            organization=unverified,
+            user=self.manager,
+            role=OrganizationMembership.Role.OWNER,
+        )
+        hidden_animal = AnimalProfile.objects.create(
+            organization=unverified,
+            created_by=self.manager,
+            name="Chưa xác minh",
+            animal_type=AnimalProfile.AnimalType.DOG,
+            description="This profile must stay private.",
+            temperament="Calm.",
+            health_status="Stable.",
+            location="Da Nang",
+        )
+        self.organization.is_verified = False
+        self.organization.save(update_fields=("is_verified", "updated_at"))
+        self.client.force_login(self.manager)
+
+        create_response = self.client.get(reverse("adoptions:animal-create"))
+        update_response = self.client.get(
+            reverse("adoptions:animal-update", args=(self.animal.pk,))
+        )
+        list_response = self.client.get(reverse("adoptions:animal-list"))
+        detail_response = self.client.get(
+            reverse("adoptions:animal-detail", args=(hidden_animal.pk,))
+        )
+
+        self.assertEqual(create_response.status_code, 403)
+        self.assertEqual(update_response.status_code, 403)
+        self.assertNotContains(list_response, hidden_animal.name)
+        self.assertEqual(detail_response.status_code, 404)
 
     def test_site_admin_can_open_profile_posting_area(self):
         self.client.force_login(self.admin)

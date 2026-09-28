@@ -1,4 +1,6 @@
+import mimetypes
 from decimal import Decimal
+from pathlib import Path
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -6,11 +8,12 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, DecimalField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
-from django.http import Http404, HttpResponseForbidden
+from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.utils.http import content_disposition_header
+from django.views.decorators.http import require_GET, require_POST
 
 from organizations.models import OrganizationMembership, RescueOrganization
 from rescue.models import Notification, RescueCase
@@ -41,6 +44,7 @@ def _managed_organizations(user):
         memberships__user=user,
         memberships__is_active=True,
         memberships__role__in=MANAGER_ROLES,
+        is_verified=True,
         is_active=True,
     ).distinct()
 
@@ -50,6 +54,8 @@ def _can_manage_campaign(user, campaign):
         return False
     if user.is_superuser:
         return True
+    if not campaign.organization.is_active or not campaign.organization.is_verified:
+        return False
     return OrganizationMembership.objects.filter(
         organization=campaign.organization,
         user=user,
@@ -59,10 +65,31 @@ def _can_manage_campaign(user, campaign):
 
 
 def _manager_ids(organization):
+    if not organization.is_active or not organization.is_verified:
+        return ()
     return organization.memberships.filter(
         is_active=True,
         role__in=MANAGER_ROLES,
+        user__is_active=True,
     ).values_list("user_id", flat=True)
+
+
+def _private_file_response(field_file):
+    try:
+        file_handle = field_file.open("rb")
+    except (FileNotFoundError, OSError, ValueError) as error:
+        raise Http404 from error
+
+    filename = Path(field_file.name).name
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    response = FileResponse(file_handle, content_type=content_type)
+    response.headers["Content-Disposition"] = content_disposition_header(
+        False,
+        filename,
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 def _campaigns_with_financials(queryset=None):
@@ -103,7 +130,10 @@ def _campaigns_with_financials(queryset=None):
 
 def campaign_list(request):
     campaigns = _campaigns_with_financials(
-        FundraisingCampaign.objects.exclude(status=FundraisingCampaign.Status.DRAFT)
+        FundraisingCampaign.objects.filter(
+            organization__is_active=True,
+            organization__is_verified=True,
+        ).exclude(status=FundraisingCampaign.Status.DRAFT)
     ).select_related("organization", "rescue_case")
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
@@ -146,6 +176,11 @@ def campaign_detail(request, pk):
         pk=pk,
     )
     can_manage = _can_manage_campaign(request.user, campaign)
+    if (
+        not campaign.organization.is_active
+        or not campaign.organization.is_verified
+    ) and not request.user.is_superuser:
+        raise Http404
     if campaign.status == FundraisingCampaign.Status.DRAFT and not can_manage:
         raise Http404
     donations = campaign.donations.filter(
@@ -157,7 +192,11 @@ def campaign_detail(request, pk):
         "donations": donations,
         "expenses": expenses,
         "can_manage": can_manage,
-        "can_donate": campaign.status == FundraisingCampaign.Status.ACTIVE,
+        "can_donate": (
+            campaign.status == FundraisingCampaign.Status.ACTIVE
+            and campaign.organization.is_active
+            and campaign.organization.is_verified
+        ),
         "donation_form": DonationForm(user=request.user),
     }
     return render(request, "donations/campaign_detail.html", context)
@@ -237,6 +276,8 @@ def donation_create(request, pk):
                 "organization"
             ),
             pk=pk,
+            organization__is_active=True,
+            organization__is_verified=True,
         )
         if campaign.status != FundraisingCampaign.Status.ACTIVE:
             messages.error(request, "Chiến dịch hiện không nhận thêm đóng góp.")
@@ -286,6 +327,41 @@ def my_donations(request):
         "donations/my_donations.html",
         {"donations": donations},
     )
+
+
+@require_GET
+def donation_proof(request, pk):
+    donation = get_object_or_404(
+        Donation.objects.select_related("campaign__organization"),
+        pk=pk,
+    )
+    can_access = request.user.is_authenticated and (
+        request.user.is_superuser
+        or donation.donor_id == request.user.pk
+        or _can_manage_campaign(request.user, donation.campaign)
+    )
+    if not can_access or not donation.proof:
+        raise Http404
+    return _private_file_response(donation.proof)
+
+
+@require_GET
+def expense_receipt(request, pk):
+    expense = get_object_or_404(
+        CampaignExpense.objects.select_related("campaign__organization"),
+        pk=pk,
+    )
+    public_receipt = (
+        expense.is_receipt_public
+        and expense.campaign.status != FundraisingCampaign.Status.DRAFT
+        and expense.campaign.organization.is_active
+        and expense.campaign.organization.is_verified
+    )
+    if not public_receipt and not _can_manage_campaign(request.user, expense.campaign):
+        raise Http404
+    if not expense.receipt:
+        raise Http404
+    return _private_file_response(expense.receipt)
 
 
 @login_required
@@ -385,7 +461,9 @@ def donation_review(request, pk):
 def expense_create(request, campaign_pk):
     campaign = get_object_or_404(FundraisingCampaign, pk=campaign_pk)
     if not _can_manage_campaign(request.user, campaign):
-        return HttpResponseForbidden("Bạn không có quyền ghi chi phí cho chiến dịch này.")
+        return HttpResponseForbidden(
+            "Bạn không có quyền ghi chi phí cho chiến dịch này."
+        )
     if request.method == "POST":
         form = CampaignExpenseForm(request.POST, request.FILES)
         if form.is_valid():

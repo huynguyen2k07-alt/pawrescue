@@ -6,6 +6,7 @@ from organizations.models import OrganizationMembership, RescueOrganization
 
 from .geography import is_within_da_nang
 from .models import CommunityFeedback, RescueAssignment, RescueCase, RescueUpdate
+from .uploads import sanitize_image_upload
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -30,7 +31,7 @@ class MultipleFileField(forms.FileField):
             if uploaded_file.size > 5 * 1024 * 1024:
                 raise forms.ValidationError("Mỗi ảnh phải nhỏ hơn 5 MB.")
 
-        return cleaned_files
+        return [sanitize_image_upload(item) for item in cleaned_files]
 
 
 class RescueCaseForm(forms.ModelForm):
@@ -214,7 +215,8 @@ class ClaimOrganizationForm(forms.Form):
 
         if user.is_superuser:
             self.fields["organization"].queryset = RescueOrganization.objects.filter(
-                is_active=True
+                is_active=True,
+                is_verified=True,
             )
             return
 
@@ -226,6 +228,8 @@ class ClaimOrganizationForm(forms.Form):
                 OrganizationMembership.Role.MANAGER,
             ),
             is_active=True,
+            is_verified=True,
+            is_system=False,
         ).distinct()
 
 

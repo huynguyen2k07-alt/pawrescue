@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
@@ -88,6 +89,69 @@ class OrganizationModelTests(TestCase):
                 is_active=True,
             ).exists()
         )
+
+    def test_user_cannot_create_reserved_pawrescue_identity(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("organizations:organization-create"),
+            {
+                "name": "  pawRESCUE  ",
+                "description": "Attempted takeover",
+                "email": "fake@example.com",
+                "phone": "0901234567",
+                "address": "Da Nang",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Tên PawRescue được dành riêng cho hệ thống.")
+        self.assertFalse(
+            RescueOrganization.objects.filter(
+                name__iexact="pawrescue",
+                is_system=False,
+            ).exists()
+        )
+
+    def test_user_cannot_rename_organization_to_reserved_identity(self):
+        OrganizationMembership.objects.create(
+            organization=self.organization,
+            user=self.user,
+            role=OrganizationMembership.Role.OWNER,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("organizations:organization-update", args=(self.organization.pk,)),
+            {
+                "name": "PawRescue",
+                "description": "Attempted takeover",
+                "email": "fake@example.com",
+                "phone": "0901234567",
+                "address": "Da Nang",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.organization.refresh_from_db()
+        self.assertEqual(self.organization.name, "Happy Paws Rescue")
+
+    def test_system_organization_cannot_have_user_membership(self):
+        system_organization, _created = RescueOrganization.objects.get_or_create(
+            is_system=True,
+            defaults={
+                "name": "PawRescue",
+                "is_verified": True,
+                "is_active": True,
+            },
+        )
+
+        with self.assertRaises(ValidationError):
+            OrganizationMembership.objects.create(
+                organization=system_organization,
+                user=self.user,
+                role=OrganizationMembership.Role.OWNER,
+            )
 
     def test_non_member_cannot_view_organization_management(self):
         self.client.force_login(self.member_user)

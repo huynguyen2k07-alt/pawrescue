@@ -11,11 +11,18 @@ class OrganizationMembershipInline(admin.TabularInline):
 
 @admin.register(RescueOrganization)
 class RescueOrganizationAdmin(admin.ModelAdmin):
-    list_display = ("name", "email", "phone", "is_verified", "is_active")
-    list_filter = ("is_verified", "is_active")
+    list_display = (
+        "name",
+        "email",
+        "phone",
+        "is_system",
+        "is_verified",
+        "is_active",
+    )
+    list_filter = ("is_system", "is_verified", "is_active")
     search_fields = ("name", "email", "phone", "address")
     autocomplete_fields = ("created_by",)
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("is_system", "created_at", "updated_at")
     inlines = (OrganizationMembershipInline,)
 
 

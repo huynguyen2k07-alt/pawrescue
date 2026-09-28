@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Đội ngũ cộng tác viên · PawRescue{% endblock %}
+
+{% block content %}
+<section class="team-hero">
+    <div class="container team-hero-grid">
+        <div class="team-hero-copy">
+            <span class="eyebrow">Cùng nhau tạo nên thay đổi</span>
+            <h1>Mỗi bàn tay góp sức,<br>thêm một hành trình an toàn.</h1>
+            <p>PawRescue là nơi người báo tin, cộng tác viên và các tổ chức địa phương phối hợp để động vật nhận đúng sự trợ giúp vào đúng lúc.</p>
+            <div class="team-hero-actions">
+                <a class="button button-accent" href="{% url 'rescue:case-create' %}">Báo ca cần giúp</a>
+                <a class="button button-light" href="{% url 'rescue:case-list' %}#feedback">Gửi lời nhắn</a>
+            </div>
+        </div>
+        <div class="team-hero-photo" data-motion-tilt data-tilt-strength="2">
+            <img src="{% static 'images/community/volunteer-dogs.jpg' %}" alt="Tình nguyện viên chăm sóc những chú chó tại nơi cứu hộ">
+            <div><strong>{{ contributor_count|stringformat:"02d" }}</strong><span>nhóm đang đồng hành</span></div>
+        </div>
+    </div>
+</section>
+
+<section class="team-values">
+    <div class="container team-value-grid">
+        <article><span aria-hidden="true">01</span><strong>An toàn trước tiên</strong><p>Không hành động vội vàng khi con người hoặc động vật có thể gặp thêm nguy hiểm.</p></article>
+        <article><span aria-hidden="true">02</span><strong>Thông tin minh bạch</strong><p>Mỗi cập nhật đều giúp cộng đồng hiểu ca cứu hộ đang ở bước nào và cần gì tiếp theo.</p></article>
+        <article><span aria-hidden="true">03</span><strong>Tôn trọng sự sống</strong><p>Mọi quyết định đều hướng tới phúc lợi lâu dài và một môi trường phù hợp cho động vật.</p></article>
+    </div>
+</section>
+
+<section class="section container team-directory" aria-labelledby="team-directory-title">
+    <div class="section-heading home-section-heading">
+        <div>
+            <span class="eyebrow eyebrow-dark">Những người đứng phía sau</span>
+            <h2 id="team-directory-title">Đội ngũ cộng tác viên</h2>
+        </div>
+        <p>Mỗi nhóm phụ trách một phần công việc, nhưng cùng chung mục tiêu kết nối trợ giúp nhanh và có trách nhiệm.</p>
+    </div>
+    <div class="contributor-grid team-contributor-grid">
+        {% for contributor in contributors %}
+            <article class="contributor-card team-card">
+                <div class="contributor-photo">
+                    {% if contributor.photo %}
+                        <img src="{{ contributor.photo.url }}" alt="{{ contributor.name }}" loading="lazy">
+                    {% elif contributor.static_image_path %}
+                        <img src="{% static contributor.static_image_path %}" alt="{{ contributor.name }}" loading="lazy">
+                    {% else %}
+                        <div class="team-photo-placeholder" aria-hidden="true">🐾</div>
+                    {% endif %}
+                    <span>{{ forloop.counter|stringformat:"02d" }}</span>
+                </div>
+                <div class="contributor-copy">
+                    <span>{{ contributor.role }}</span>
+                    <h3>{{ contributor.name }}</h3>
+                    <p>{{ contributor.bio }}</p>
+                    {% if contributor.photo_source_url %}<a href="{{ contributor.photo_source_url }}" target="_blank" rel="noopener noreferrer">Ảnh: {{ contributor.photo_credit }} ↗</a>{% endif %}
+                </div>
+            </article>
+        {% empty %}
+            <div class="empty-state">
+                <span aria-hidden="true">🌱</span>
+                <h3>Đội ngũ đang được cập nhật</h3>
+                <p>Thông tin cộng tác viên sẽ sớm xuất hiện tại đây.</p>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="team-callout">
+    <div class="container team-callout-inner">
+        <div><span class="eyebrow">Cùng PawRescue lên tiếng</span><h2>Bạn thấy điều gì có thể làm tốt hơn?</h2><p>Gửi góp ý để đội ngũ cải thiện trải nghiệm báo tin, cứu hộ và kết nối nhận nuôi.</p></div>
+        <a class="button button-accent" href="{% url 'rescue:case-list' %}#feedback">Gửi góp ý</a>
+    </div>
+</section>
+{% endblock %}

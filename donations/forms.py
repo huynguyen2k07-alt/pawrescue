@@ -2,8 +2,10 @@ from django import forms
 
 from organizations.models import OrganizationMembership, RescueOrganization
 from rescue.models import RescueCase
+from rescue.uploads import sanitize_image_upload
 
 from .models import CampaignExpense, Donation, FundraisingCampaign
+from .uploads import sanitize_receipt_upload
 
 
 MANAGER_ROLES = (
@@ -21,6 +23,7 @@ def _managed_organizations(user):
         memberships__user=user,
         memberships__is_active=True,
         memberships__role__in=MANAGER_ROLES,
+        is_verified=True,
         is_active=True,
     ).distinct()
 
@@ -84,7 +87,10 @@ class FundraisingCampaignForm(forms.ModelForm):
         self.fields["rescue_case"].required = False
 
     def clean_cover_image(self):
-        return _validate_upload_size(self.cleaned_data.get("cover_image"))
+        uploaded_file = _validate_upload_size(
+            self.cleaned_data.get("cover_image")
+        )
+        return sanitize_image_upload(uploaded_file) if uploaded_file else None
 
     def clean(self):
         cleaned_data = super().clean()
@@ -145,7 +151,8 @@ class DonationForm(forms.ModelForm):
             self.initial.setdefault("donor_email", user.email)
 
     def clean_proof(self):
-        return _validate_upload_size(self.cleaned_data.get("proof"))
+        uploaded_file = _validate_upload_size(self.cleaned_data.get("proof"))
+        return sanitize_receipt_upload(uploaded_file) if uploaded_file else None
 
 
 class CampaignExpenseForm(forms.ModelForm):
@@ -178,7 +185,8 @@ class CampaignExpenseForm(forms.ModelForm):
         }
 
     def clean_receipt(self):
-        return _validate_upload_size(self.cleaned_data.get("receipt"))
+        uploaded_file = _validate_upload_size(self.cleaned_data.get("receipt"))
+        return sanitize_receipt_upload(uploaded_file) if uploaded_file else None
 
 
 class DonationReviewForm(forms.Form):

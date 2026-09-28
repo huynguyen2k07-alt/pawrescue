@@ -2,7 +2,7 @@
     <a class="case-card-media" href="{% url 'rescue:case-detail' case.pk %}">
         {% with images=case.images.all %}
             {% if images %}
-                <img src="{{ images.0.image.url }}" alt="Ảnh của ca {{ case.title }}">
+                <img src="{% url 'rescue:case-image' images.0.pk %}" alt="Ảnh của ca {{ case.title }}">
             {% else %}
                 <span class="case-placeholder" aria-hidden="true">🐾</span>
             {% endif %}

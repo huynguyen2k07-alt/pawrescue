@@ -8,6 +8,7 @@ urlpatterns = [
     path("", views.case_list, name="case-list"),
     path("map/", views.case_map, name="case-map"),
     path("knowledge/", views.knowledge_list, name="knowledge-list"),
+    path("team/", views.team, name="team"),
     path(
         "knowledge/<slug:slug>/",
         views.knowledge_detail,
@@ -15,6 +16,8 @@ urlpatterns = [
     ),
     path("cases/new/", views.case_create, name="case-create"),
     path("cases/mine/", views.my_cases, name="my-cases"),
+    path("case-images/<int:pk>/", views.case_image, name="case-image"),
+    path("update-images/<int:pk>/", views.update_image, name="update-image"),
     path("cases/<int:pk>/", views.case_detail, name="case-detail"),
     path("cases/<int:pk>/claim/", views.case_claim, name="case-claim"),
     path(

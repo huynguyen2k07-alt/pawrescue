@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.db import models as db_models
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponseNotAllowed, HttpResponseRedirect
@@ -11,7 +12,11 @@ from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
-from organizations.models import OrganizationMembership, RescueOrganization
+from organizations.models import (
+    SYSTEM_ORGANIZATION_NAME,
+    OrganizationMembership,
+    RescueOrganization,
+)
 from support.models import SupportConversation
 
 from .models import (
@@ -27,9 +32,16 @@ from .models import (
     RescueUpdateImage,
 )
 from .notifications import case_participant_ids, create_case_notifications
+from .widgets import PrivateAdminImageWidget
 
 
-PAWRESCUE_ORGANIZATION_NAME = "PawRescue"
+PAWRESCUE_ORGANIZATION_NAME = SYSTEM_ORGANIZATION_NAME
+
+TERMINAL_CASE_STATUSES = {
+    RescueCase.Status.RESCUED,
+    RescueCase.Status.CLOSED,
+    RescueCase.Status.CANCELLED,
+}
 
 
 def _feedback_gmail_url(feedback):
@@ -54,45 +66,43 @@ def _feedback_gmail_url(feedback):
     )
 
 
-def _pawrescue_organization(user):
-    organization, created = RescueOrganization.objects.get_or_create(
-        name=PAWRESCUE_ORGANIZATION_NAME,
+def _pawrescue_organization(user=None):
+    organization, _created = RescueOrganization.objects.get_or_create(
+        is_system=True,
         defaults={
+            "name": PAWRESCUE_ORGANIZATION_NAME,
             "description": "Đội điều phối mặc định của trung tâm PawRescue.",
             "is_verified": True,
             "is_active": True,
-            "created_by": user,
+            "created_by": None,
         },
     )
     organization_updates = []
+    if organization.name != PAWRESCUE_ORGANIZATION_NAME:
+        organization.name = PAWRESCUE_ORGANIZATION_NAME
+        organization_updates.append("name")
     if not organization.is_verified:
         organization.is_verified = True
         organization_updates.append("is_verified")
     if not organization.is_active:
         organization.is_active = True
         organization_updates.append("is_active")
+    if organization.created_by_id is not None:
+        organization.created_by = None
+        organization_updates.append("created_by")
     if organization_updates:
         organization.save(update_fields=organization_updates + ["updated_at"])
-
-    membership, _created = OrganizationMembership.objects.get_or_create(
-        organization=organization,
-        user=user,
-        defaults={"role": OrganizationMembership.Role.MANAGER},
-    )
-    membership_updates = []
-    if membership.role == OrganizationMembership.Role.VOLUNTEER:
-        membership.role = OrganizationMembership.Role.MANAGER
-        membership_updates.append("role")
-    if not membership.is_active:
-        membership.is_active = True
-        membership_updates.append("is_active")
-    if membership_updates:
-        membership.save(update_fields=membership_updates)
+    # PawRescue is a system identity, not a user-owned organization.  Staff
+    # authority comes from Django permissions rather than a hidden membership.
+    OrganizationMembership.objects.filter(organization=organization).delete()
     return organization
 
 
 def _accept_case(case, organization, actor):
-    if case.organization_id is not None:
+    if (
+        case.organization_id is not None
+        or case.status in TERMINAL_CASE_STATUSES
+    ):
         return False
 
     previous_status = case.status
@@ -124,9 +134,12 @@ def _accept_case(case, organization, actor):
 
 class RescueCaseImageInline(admin.TabularInline):
     model = RescueCaseImage
-    extra = 0
+    extra = 1
     autocomplete_fields = ("uploaded_by",)
     readonly_fields = ("uploaded_at",)
+    formfield_overrides = {
+        db_models.FileField: {"widget": PrivateAdminImageWidget},
+    }
 
 
 class RescueAssignmentInline(admin.TabularInline):
@@ -180,12 +193,19 @@ class RescueCaseAdmin(admin.ModelAdmin):
     autocomplete_fields = ("reporter", "organization")
     readonly_fields = ("status", "reported_at", "updated_at", "closed_at")
     actions = ("accept_selected_cases",)
+    save_on_top = True
+    view_on_site = True
     inlines = (
         RescueCaseImageInline,
         RescueAssignmentInline,
         CaseStatusHistoryInline,
         RescueUpdateInline,
     )
+
+    def get_view_on_site_url(self, obj=None):
+        if obj is None or obj.pk is None:
+            return None
+        return reverse("rescue:case-detail", args=(obj.pk,))
 
     def get_urls(self):
         custom_urls = [
@@ -289,17 +309,12 @@ class RescueCaseAdmin(admin.ModelAdmin):
 
     def change_view(self, request, object_id, form_url="", extra_context=None):
         rescue_case = self.get_object(request, object_id)
-        terminal_statuses = {
-            RescueCase.Status.RESCUED,
-            RescueCase.Status.CLOSED,
-            RescueCase.Status.CANCELLED,
-        }
         extra_context = {
             **(extra_context or {}),
             "accept_case_available": bool(
                 rescue_case
                 and rescue_case.organization_id is None
-                and rescue_case.status not in terminal_statuses
+                and rescue_case.status not in TERMINAL_CASE_STATUSES
             ),
         }
         return super().change_view(
@@ -328,7 +343,7 @@ class RescueCaseAdmin(admin.ModelAdmin):
         if skipped_count:
             self.message_user(
                 request,
-                f"Bỏ qua {skipped_count} ca đã có đơn vị tiếp nhận.",
+                f"Bỏ qua {skipped_count} ca đã có đơn vị tiếp nhận hoặc đã kết thúc.",
                 level=messages.INFO,
             )
 
@@ -349,7 +364,9 @@ class RescueCaseAdmin(admin.ModelAdmin):
             change
             and "_accept_case" in request.POST
             and previous_organization_id is None
+            and previous_status not in TERMINAL_CASE_STATUSES
         )
+        request._pawrescue_accept_processed = accept_requested
         if accept_requested:
             obj.organization = _pawrescue_organization(request.user)
             if obj.status == RescueCase.Status.REPORTED:
@@ -402,11 +419,18 @@ class RescueCaseAdmin(admin.ModelAdmin):
 
     def response_change(self, request, obj):
         if "_accept_case" in request.POST:
-            self.message_user(
-                request,
-                "Đã tiếp nhận ca bởi PawRescue. Người báo tin cũng đã được thông báo.",
-                level=messages.SUCCESS,
-            )
+            if getattr(request, "_pawrescue_accept_processed", False):
+                self.message_user(
+                    request,
+                    "Đã tiếp nhận ca bởi PawRescue. Người báo tin cũng đã được thông báo.",
+                    level=messages.SUCCESS,
+                )
+            else:
+                self.message_user(
+                    request,
+                    "Không thể tiếp nhận ca đã có đơn vị phụ trách hoặc đã kết thúc.",
+                    level=messages.INFO,
+                )
             return HttpResponseRedirect(".")
         return super().response_change(request, obj)
 
@@ -417,6 +441,9 @@ class RescueCaseImageAdmin(admin.ModelAdmin):
     search_fields = ("rescue_case__title", "caption")
     autocomplete_fields = ("rescue_case", "uploaded_by")
     readonly_fields = ("uploaded_at",)
+    formfield_overrides = {
+        db_models.FileField: {"widget": PrivateAdminImageWidget},
+    }
 
 
 @admin.register(RescueAssignment)
@@ -449,8 +476,11 @@ class CaseStatusHistoryAdmin(admin.ModelAdmin):
 
 class RescueUpdateImageInline(admin.TabularInline):
     model = RescueUpdateImage
-    extra = 0
+    extra = 1
     readonly_fields = ("uploaded_at",)
+    formfield_overrides = {
+        db_models.FileField: {"widget": PrivateAdminImageWidget},
+    }
 
 
 @admin.register(RescueUpdate)
@@ -497,6 +527,8 @@ class KnowledgeArticleAdmin(admin.ModelAdmin):
     search_fields = ("title", "excerpt", "body", "source_name")
     prepopulated_fields = {"slug": ("title",)}
     readonly_fields = ("created_at", "updated_at")
+    save_on_top = True
+    view_on_site = True
 
 
 @admin.register(ContributorProfile)
@@ -505,7 +537,15 @@ class ContributorProfileAdmin(admin.ModelAdmin):
     list_editable = ("display_order", "is_active")
     list_filter = ("is_active",)
     search_fields = ("name", "role", "bio")
+    ordering = ("display_order", "name")
     readonly_fields = ("created_at", "updated_at")
+    save_on_top = True
+    view_on_site = True
+
+    def get_view_on_site_url(self, obj=None):
+        if obj is None or obj.pk is None:
+            return None
+        return reverse("rescue:team")
 
 
 @admin.register(CommunityFeedback)

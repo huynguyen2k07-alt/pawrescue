@@ -1,4 +1,5 @@
 from decimal import Decimal
+from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
@@ -9,7 +10,11 @@ from django.urls import reverse
 from organizations.models import OrganizationMembership, RescueOrganization
 from rescue.models import Notification, RescueCase
 
+from .forms import DonationForm
 from .models import CampaignExpense, Donation, FundraisingCampaign
+
+
+PDF_DOCUMENT = b"%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n"
 
 
 class FundraisingWorkflowTests(TestCase):
@@ -34,6 +39,7 @@ class FundraisingWorkflowTests(TestCase):
             name="Transparent Rescue Fund",
             created_by=self.manager,
             address="Ho Chi Minh City",
+            is_verified=True,
         )
         OrganizationMembership.objects.create(
             organization=self.organization,
@@ -235,15 +241,31 @@ class FundraisingWorkflowTests(TestCase):
         donation.refresh_from_db()
         self.assertEqual(donation.status, Donation.Status.PENDING)
 
+    def test_fake_pdf_proof_is_rejected_by_file_signature(self):
+        form = DonationForm(
+            data=self.donation_data(),
+            files={
+                "proof": SimpleUploadedFile(
+                    "transfer-proof.pdf",
+                    b"<script>alert('not a pdf')</script>",
+                    content_type="application/pdf",
+                )
+            },
+            user=self.donor,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("proof", form.errors)
+
     def test_manager_can_record_expense_with_private_receipt(self):
         self.client.force_login(self.manager)
         receipt = SimpleUploadedFile(
             "receipt.pdf",
-            b"test-receipt",
+            PDF_DOCUMENT,
             content_type="application/pdf",
         )
-        with TemporaryDirectory() as media_root, override_settings(
-            MEDIA_ROOT=media_root
+        with TemporaryDirectory() as private_root, override_settings(
+            PRIVATE_DONATION_MEDIA_ROOT=private_root
         ):
             response = self.client.post(
                 reverse("donations:expense-create", args=(self.campaign.pk,)),
@@ -262,6 +284,7 @@ class FundraisingWorkflowTests(TestCase):
             expense = CampaignExpense.objects.get()
             self.assertFalse(expense.is_receipt_public)
             self.assertTrue(bool(expense.receipt))
+            self.assertTrue((Path(private_root) / expense.receipt.name).is_file())
 
     def test_my_donations_only_shows_current_users_records(self):
         own = Donation.objects.create(
@@ -296,3 +319,145 @@ class FundraisingWorkflowTests(TestCase):
 
         self.assertEqual(anonymous_response.status_code, 404)
         self.assertEqual(manager_response.status_code, 200)
+
+    def test_unverified_organization_cannot_publish_or_manage_fundraising(self):
+        unverified = RescueOrganization.objects.create(
+            name="Unverified Fund",
+            created_by=self.manager,
+            is_verified=False,
+        )
+        OrganizationMembership.objects.create(
+            organization=unverified,
+            user=self.manager,
+            role=OrganizationMembership.Role.OWNER,
+        )
+        hidden_campaign = FundraisingCampaign.objects.create(
+            organization=unverified,
+            created_by=self.manager,
+            title="Unverified public campaign",
+            description="This must not be public.",
+            target_amount=Decimal("1000000"),
+            status=FundraisingCampaign.Status.ACTIVE,
+        )
+        self.client.force_login(self.manager)
+
+        create_response = self.client.get(reverse("donations:campaign-create"))
+        update_response = self.client.get(
+            reverse("donations:campaign-update", args=(hidden_campaign.pk,))
+        )
+        expense_response = self.client.get(
+            reverse("donations:expense-create", args=(hidden_campaign.pk,))
+        )
+        detail_response = self.client.get(
+            reverse("donations:campaign-detail", args=(hidden_campaign.pk,))
+        )
+        list_response = self.client.get(reverse("donations:campaign-list"))
+
+        self.assertNotIn(
+            unverified,
+            create_response.context["form"].fields["organization"].queryset,
+        )
+        self.assertEqual(update_response.status_code, 403)
+        self.assertEqual(expense_response.status_code, 403)
+        self.assertEqual(detail_response.status_code, 404)
+        self.assertNotContains(list_response, hidden_campaign.title)
+
+    def test_donation_proof_is_private_and_only_authorized_users_can_open_it(self):
+        with TemporaryDirectory() as private_root, override_settings(
+            PRIVATE_DONATION_MEDIA_ROOT=private_root
+        ):
+            donation = Donation.objects.create(
+                campaign=self.campaign,
+                donor=self.donor,
+                donor_name=self.donor.full_name,
+                donor_email=self.donor.email,
+                amount=Decimal("250000"),
+                proof=SimpleUploadedFile(
+                    "transfer-proof.pdf",
+                    PDF_DOCUMENT,
+                    content_type="application/pdf",
+                ),
+            )
+            proof_url = reverse("donations:donation-proof", args=(donation.pk,))
+
+            self.assertTrue((Path(private_root) / donation.proof.name).is_file())
+            with self.assertRaises(ValueError):
+                _ = donation.proof.url
+
+            anonymous_response = self.client.get(proof_url)
+            self.client.force_login(self.other_user)
+            outsider_response = self.client.get(proof_url)
+            self.client.force_login(self.donor)
+            donor_response = self.client.get(proof_url)
+            self.assertEqual(b"".join(donor_response.streaming_content), PDF_DOCUMENT)
+            self.client.force_login(self.manager)
+            manager_response = self.client.get(proof_url)
+            self.assertEqual(b"".join(manager_response.streaming_content), PDF_DOCUMENT)
+
+            self.assertEqual(anonymous_response.status_code, 404)
+            self.assertEqual(outsider_response.status_code, 404)
+            self.assertEqual(donor_response.status_code, 200)
+            self.assertEqual(manager_response.status_code, 200)
+            self.assertEqual(donor_response.headers["Cache-Control"], "private, no-store")
+            self.assertEqual(
+                donor_response.headers["X-Content-Type-Options"],
+                "nosniff",
+            )
+
+    def test_public_and_private_receipt_access(self):
+        with TemporaryDirectory() as private_root, override_settings(
+            PRIVATE_DONATION_MEDIA_ROOT=private_root
+        ):
+            public_expense = CampaignExpense.objects.create(
+                campaign=self.campaign,
+                category=CampaignExpense.Category.MEDICAL,
+                amount=Decimal("300000"),
+                description="Public hospital receipt",
+                spent_at="2026-09-21",
+                receipt=SimpleUploadedFile(
+                    "public-receipt.pdf",
+                    PDF_DOCUMENT,
+                    content_type="application/pdf",
+                ),
+                is_receipt_public=True,
+                recorded_by=self.manager,
+            )
+            private_expense = CampaignExpense.objects.create(
+                campaign=self.campaign,
+                category=CampaignExpense.Category.MEDICINE,
+                amount=Decimal("200000"),
+                description="Private pharmacy receipt",
+                spent_at="2026-09-22",
+                receipt=SimpleUploadedFile(
+                    "private-receipt.pdf",
+                    PDF_DOCUMENT,
+                    content_type="application/pdf",
+                ),
+                is_receipt_public=False,
+                recorded_by=self.manager,
+            )
+            public_url = reverse(
+                "donations:expense-receipt",
+                args=(public_expense.pk,),
+            )
+            private_url = reverse(
+                "donations:expense-receipt",
+                args=(private_expense.pk,),
+            )
+
+            public_response = self.client.get(public_url)
+            self.assertEqual(b"".join(public_response.streaming_content), PDF_DOCUMENT)
+            anonymous_private_response = self.client.get(private_url)
+            self.client.force_login(self.other_user)
+            outsider_private_response = self.client.get(private_url)
+            self.client.force_login(self.manager)
+            manager_private_response = self.client.get(private_url)
+            self.assertEqual(
+                b"".join(manager_private_response.streaming_content),
+                PDF_DOCUMENT,
+            )
+
+            self.assertEqual(public_response.status_code, 200)
+            self.assertEqual(anonymous_private_response.status_code, 404)
+            self.assertEqual(outsider_private_response.status_code, 404)
+            self.assertEqual(manager_private_response.status_code, 200)

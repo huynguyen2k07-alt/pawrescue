@@ -1,3 +1,5 @@
+import mimetypes
+
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -5,13 +7,14 @@ from django.conf import settings
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import HttpResponseForbidden
+from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.decorators.http import require_POST
+from django.utils.http import content_disposition_header, url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_GET, require_POST
 
+from accounts.permissions import is_support_operator, support_operator_ids
 from organizations.models import OrganizationMembership, RescueOrganization
 
 from .forms import (
@@ -30,6 +33,7 @@ from .models import (
     RescueAssignment,
     RescueCase,
     RescueCaseImage,
+    RescueUpdateImage,
     RescueUpdateImage,
 )
 from .notifications import (
@@ -51,6 +55,12 @@ ACTIVE_CASE_STATUSES = (
     RescueCase.Status.IN_PROGRESS,
 )
 
+TERMINAL_CASE_STATUSES = {
+    RescueCase.Status.RESCUED,
+    RescueCase.Status.CLOSED,
+    RescueCase.Status.CANCELLED,
+}
+
 PUBLIC_STATUS_FILTERS = (
     (RescueCase.Status.VERIFIED, "Đã xác nhận"),
     (RescueCase.Status.RESCUED, "Đã cứu thành công"),
@@ -62,13 +72,38 @@ def _manager_organizations(user):
     if not user.is_authenticated:
         return RescueOrganization.objects.none()
     if user.is_superuser:
-        return RescueOrganization.objects.filter(is_active=True)
+        return RescueOrganization.objects.filter(
+            is_active=True,
+            is_verified=True,
+        )
     return RescueOrganization.objects.filter(
         memberships__user=user,
         memberships__is_active=True,
         memberships__role__in=MANAGER_ROLES,
         is_active=True,
+        is_verified=True,
+        is_system=False,
     ).distinct()
+
+
+def _can_review_reported_cases(user):
+    """Operators and verified organization managers may triage new reports."""
+    if not user.is_authenticated:
+        return False
+    if is_support_operator(user):
+        return True
+    return _manager_organizations(user).exists()
+
+
+def _visible_cases_for(user, queryset):
+    """Keep unverified reports private while preserving the triage workflow."""
+    if not user.is_authenticated:
+        return queryset.exclude(status=RescueCase.Status.REPORTED)
+    if _can_review_reported_cases(user):
+        return queryset
+    return queryset.filter(
+        ~Q(status=RescueCase.Status.REPORTED) | Q(reporter=user)
+    )
 
 
 def _can_manage_case(user, rescue_case):
@@ -78,16 +113,26 @@ def _can_manage_case(user, rescue_case):
         return True
     return OrganizationMembership.objects.filter(
         organization=rescue_case.organization,
+        organization__is_active=True,
+        organization__is_verified=True,
+        organization__is_system=False,
         user=user,
         is_active=True,
         role__in=MANAGER_ROLES,
     ).exists()
 
 
+def _has_operational_organization(rescue_case):
+    if rescue_case.organization_id is None:
+        return False
+    organization = rescue_case.organization
+    return organization.is_active and organization.is_verified
+
+
 def _can_add_case_update(user, rescue_case):
     if _can_manage_case(user, rescue_case):
         return True
-    if not user.is_authenticated:
+    if not user.is_authenticated or not _has_operational_organization(rescue_case):
         return False
     return rescue_case.assignments.filter(
         assignee=user,
@@ -98,10 +143,12 @@ def _can_add_case_update(user, rescue_case):
 def _can_view_contact(user, rescue_case):
     if not user.is_authenticated:
         return False
-    if user.is_superuser or rescue_case.reporter_id == user.id:
+    if is_support_operator(user) or rescue_case.reporter_id == user.id:
         return True
     if _can_manage_case(user, rescue_case):
         return True
+    if not _has_operational_organization(rescue_case):
+        return False
     return rescue_case.assignments.filter(assignee=user, is_active=True).exists()
 
 
@@ -110,13 +157,15 @@ def _can_view_exact_location(user, rescue_case, manager_organization_ids=None):
         return True
     if not user.is_authenticated:
         return False
-    if user.is_superuser or rescue_case.reporter_id == user.id:
+    if is_support_operator(user) or rescue_case.reporter_id == user.id:
         return True
     if manager_organization_ids is not None:
         if rescue_case.organization_id in manager_organization_ids:
             return True
     elif _can_manage_case(user, rescue_case):
         return True
+    if not _has_operational_organization(rescue_case):
+        return False
     return any(
         assignment.assignee_id == user.id and assignment.is_active
         for assignment in rescue_case.assignments.all()
@@ -140,8 +189,54 @@ def _display_coordinates(user, rescue_case, manager_organization_ids=None):
     return round(latitude, 2), round(longitude, 2), True
 
 
+def _private_image_response(field_file):
+    try:
+        file_handle = field_file.open("rb")
+    except (FileNotFoundError, OSError) as error:
+        raise Http404 from error
+    content_type = mimetypes.guess_type(field_file.name)[0] or "application/octet-stream"
+    response = FileResponse(file_handle, content_type=content_type)
+    response.headers["Content-Disposition"] = content_disposition_header(
+        False,
+        field_file.name.rsplit("/", 1)[-1],
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@require_GET
+def case_image(request, pk):
+    item = get_object_or_404(
+        RescueCaseImage.objects.select_related("rescue_case"),
+        pk=pk,
+    )
+    if not _visible_cases_for(
+        request.user,
+        RescueCase.objects.filter(pk=item.rescue_case_id),
+    ).exists():
+        raise Http404
+    return _private_image_response(item.image)
+
+
+@require_GET
+def update_image(request, pk):
+    item = get_object_or_404(
+        RescueUpdateImage.objects.select_related("update__rescue_case"),
+        pk=pk,
+    )
+    rescue_case = item.update.rescue_case
+    if not _visible_cases_for(
+        request.user,
+        RescueCase.objects.filter(pk=rescue_case.pk),
+    ).exists():
+        raise Http404
+    return _private_image_response(item.image)
+
+
 def case_list(request):
-    cases = RescueCase.objects.select_related(
+    visible_cases = _visible_cases_for(request.user, RescueCase.objects.all())
+    cases = visible_cases.select_related(
         "organization",
         "reporter",
     ).prefetch_related("images")
@@ -165,7 +260,7 @@ def case_list(request):
     if animal_type in RescueCase.AnimalType.values:
         cases = cases.filter(animal_type=animal_type)
 
-    summary = RescueCase.objects.aggregate(
+    summary = visible_cases.aggregate(
         active=Count(
             "id",
             filter=Q(
@@ -227,12 +322,8 @@ def case_list(request):
             if request.user.is_authenticated:
                 feedback.user = request.user
             feedback.save()
-            staff_ids = get_user_model().objects.filter(
-                is_active=True,
-                is_staff=True,
-            ).values_list("id", flat=True)
             create_notifications(
-                recipient_ids=staff_ids,
+                recipient_ids=support_operator_ids(get_user_model()),
                 kind=Notification.Kind.FEEDBACK_RECEIVED,
                 title="Có góp ý mới từ cộng đồng",
                 message=(
@@ -240,7 +331,7 @@ def case_list(request):
                     f'“{feedback.get_category_display()}”.'
                 ),
                 actor=request.user if request.user.is_authenticated else None,
-                target_url=reverse("admin:rescue_communityfeedback_changelist"),
+                target_url=reverse("collaborators:dashboard"),
             )
             messages.success(
                 request,
@@ -263,24 +354,45 @@ def case_list(request):
         "knowledge_articles": KnowledgeArticle.objects.filter(
             is_published=True
         )[:4],
-        "contributors": ContributorProfile.objects.filter(is_active=True)[:3],
+        "contributors": ContributorProfile.objects.filter(is_active=True)[:4],
         "feedback_form": feedback_form,
     }
     return render(request, "rescue/case_list.html", context)
 
 
 def knowledge_list(request):
-    articles = KnowledgeArticle.objects.filter(is_published=True)
+    published_articles = KnowledgeArticle.objects.filter(is_published=True)
     category = request.GET.get("category", "").strip()
+    articles = published_articles
     if category in KnowledgeArticle.Category.values:
         articles = articles.filter(category=category)
+    else:
+        category = ""
+
+    featured_article = articles.filter(is_featured=True).first()
+    if featured_article is None:
+        featured_article = articles.first()
+    article_cards = articles
+    if featured_article is not None:
+        article_cards = articles.exclude(pk=featured_article.pk)
+
+    category_filters = [
+        {
+            "value": value,
+            "label": label,
+            "count": published_articles.filter(category=value).count(),
+        }
+        for value, label in KnowledgeArticle.Category.choices
+    ]
     return render(
         request,
         "rescue/knowledge_list.html",
         {
-            "articles": articles,
-            "category_choices": KnowledgeArticle.Category.choices,
+            "articles": article_cards,
+            "featured_article": featured_article,
+            "category_filters": category_filters,
             "selected_category": category,
+            "published_article_count": published_articles.count(),
         },
     )
 
@@ -302,9 +414,21 @@ def knowledge_detail(request, slug):
     )
 
 
+def team(request):
+    contributors = ContributorProfile.objects.filter(is_active=True)
+    return render(
+        request,
+        "rescue/team.html",
+        {
+            "contributors": contributors,
+            "contributor_count": contributors.count(),
+        },
+    )
+
+
 def case_detail(request, pk):
     rescue_case = get_object_or_404(
-        RescueCase.objects.select_related(
+        _visible_cases_for(request.user, RescueCase.objects.all()).select_related(
             "organization",
             "reporter",
             "adoption_profile",
@@ -319,7 +443,11 @@ def case_detail(request, pk):
     )
     can_manage = _can_manage_case(request.user, rescue_case)
     manager_organizations = _manager_organizations(request.user)
-    can_claim = rescue_case.organization_id is None and manager_organizations.exists()
+    can_claim = (
+        rescue_case.organization_id is None
+        and rescue_case.status not in TERMINAL_CASE_STATUSES
+        and manager_organizations.exists()
+    )
     map_latitude, map_longitude, map_is_approximate = _display_coordinates(
         request.user,
         rescue_case,
@@ -375,7 +503,7 @@ def case_detail(request, pk):
 
 def case_map(request):
     cases = (
-        RescueCase.objects.filter(
+        _visible_cases_for(request.user, RescueCase.objects.all()).filter(
             status__in=(
                 RescueCase.Status.REPORTED,
                 RescueCase.Status.VERIFIED,
@@ -430,7 +558,11 @@ def case_map(request):
                     "rescue:case-detail",
                     args=(rescue_case.pk,),
                 ),
-                "image_url": images[0].image.url if images else "",
+                "image_url": (
+                    reverse("rescue:case-image", args=(images[0].pk,))
+                    if images
+                    else ""
+                ),
             }
         )
 
@@ -458,6 +590,21 @@ def case_create(request):
                         image=image,
                         uploaded_by=request.user,
                     )
+                create_notifications(
+                    recipient_ids=support_operator_ids(get_user_model()),
+                    rescue_case=rescue_case,
+                    kind=Notification.Kind.CASE_REPORTED,
+                    title="Có tin báo cứu hộ mới",
+                    message=(
+                        f'{request.user.full_name} vừa báo ca "{rescue_case.title}" '
+                        f"tại {rescue_case.address}."
+                    ),
+                    actor=request.user,
+                    target_url=reverse(
+                        "rescue:case-detail",
+                        args=(rescue_case.pk,),
+                    ),
+                )
 
             messages.success(
                 request,
@@ -610,8 +757,19 @@ def case_claim(request, pk):
         if rescue_case.organization_id is not None:
             messages.info(request, "Ca này đã được một tổ chức khác tiếp nhận.")
             return redirect("rescue:case-detail", pk=pk)
+        if rescue_case.status in TERMINAL_CASE_STATUSES:
+            messages.error(request, "Ca đã kết thúc nên không thể tiếp nhận.")
+            return redirect("rescue:case-detail", pk=pk)
 
-        organization = form.cleaned_data["organization"]
+        organization = _manager_organizations(request.user).filter(
+            pk=form.cleaned_data["organization"].pk,
+        ).first()
+        if organization is None:
+            messages.error(
+                request,
+                "Tổ chức chưa được xác minh hoặc bạn không còn quyền tiếp nhận.",
+            )
+            return redirect("rescue:case-detail", pk=pk)
         rescue_case.organization = organization
         rescue_case.save(update_fields=("organization", "updated_at"))
         if rescue_case.status == RescueCase.Status.REPORTED:

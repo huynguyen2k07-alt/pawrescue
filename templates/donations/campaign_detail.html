@@ -32,7 +32,7 @@
                         <article class="ledger-row">
                             <div><span class="expense-category">{{ expense.get_category_display }}</span><strong>{{ expense.description }}</strong><small>{{ expense.spent_at|date:"d/m/Y" }}</small></div>
                             <div class="ledger-amount">− {{ expense.amount|floatformat:"0g" }} ₫
-                                {% if expense.receipt %}{% if expense.is_receipt_public or can_manage %}<a href="{{ expense.receipt.url }}" target="_blank" rel="noopener">Xem biên lai</a>{% endif %}{% endif %}
+                                {% if expense.receipt %}{% if expense.is_receipt_public or can_manage %}<a href="{% url 'donations:expense-receipt' expense.pk %}" target="_blank" rel="noopener">Xem biên lai</a>{% endif %}{% endif %}
                             </div>
                         </article>
                     {% empty %}<div class="empty-state compact-empty"><span>🧾</span><h3>Chưa phát sinh chi phí</h3><p>Các khoản chi sẽ được công khai tại đây.</p></div>{% endfor %}

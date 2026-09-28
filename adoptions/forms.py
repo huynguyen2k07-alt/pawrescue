@@ -4,6 +4,7 @@ from django.db.models import Q
 
 from organizations.models import OrganizationMembership, RescueOrganization
 from rescue.models import RescueCase
+from rescue.uploads import sanitize_image_upload
 
 from .models import (
     AdoptionApplication,
@@ -37,7 +38,7 @@ class MultipleFileField(forms.FileField):
         for uploaded_file in cleaned_files:
             if uploaded_file.size > 5 * 1024 * 1024:
                 raise forms.ValidationError("Mỗi ảnh phải nhỏ hơn 5 MB.")
-        return cleaned_files
+        return [sanitize_image_upload(item) for item in cleaned_files]
 
 
 class AnimalProfileForm(forms.ModelForm):
@@ -109,13 +110,18 @@ class AnimalProfileForm(forms.ModelForm):
         if user is None or not user.is_authenticated:
             organizations = RescueOrganization.objects.none()
         elif user.is_superuser:
-            organizations = RescueOrganization.objects.filter(is_active=True)
+            organizations = RescueOrganization.objects.filter(
+                is_active=True,
+                is_verified=True,
+            )
         else:
             organizations = RescueOrganization.objects.filter(
                 memberships__user=user,
                 memberships__is_active=True,
                 memberships__role__in=MANAGER_ROLES,
                 is_active=True,
+                is_verified=True,
+                is_system=False,
             ).distinct()
         self.fields["organization"].queryset = organizations
 

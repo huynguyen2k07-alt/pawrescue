@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from django.contrib import messages as django_messages
-from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -13,6 +12,11 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_GET, require_POST
 
+from accounts.permissions import (
+    is_support_operator,
+    support_operator_ids,
+    support_operator_required,
+)
 from rescue.models import CommunityFeedback, Notification, RescueCase
 from rescue.notifications import create_notifications
 
@@ -25,11 +29,8 @@ from .models import (
 )
 
 
-def _staff_ids():
-    return get_user_model().objects.filter(
-        is_active=True,
-        is_staff=True,
-    ).values_list("pk", flat=True)
+def _operator_ids():
+    return support_operator_ids(get_user_model())
 
 
 def _serialize_message(message):
@@ -39,7 +40,7 @@ def _serialize_message(message):
         "body": message.body,
         "is_admin": message.sender_role == SupportMessage.SenderRole.ADMIN,
         "sender_name": (
-            "Quản trị viên PawRescue"
+            "Đội hỗ trợ PawRescue"
             if message.sender_role == SupportMessage.SenderRole.ADMIN
             else message.sender.full_name or message.sender.email
         ),
@@ -83,9 +84,44 @@ def _notification_preview(chat_message):
     return f"Đã gửi {attachment_count} ảnh/video đính kèm."
 
 
-def _conversation_queryset():
+def _operator_can_access_conversation(user, conversation):
+    return user.is_superuser or conversation.assigned_to_id in {
+        None,
+        user.pk,
+    }
+
+
+def _operator_conversation_queryset(user):
+    queryset = SupportConversation.objects.select_related("user", "assigned_to")
+    if user.is_superuser:
+        return queryset
+    return queryset.filter(Q(assigned_to__isnull=True) | Q(assigned_to=user))
+
+
+def _lock_operator_conversation(user, pk):
+    """Lock one plain conversation row, then re-check operator ownership.
+
+    The list queryset carries a COUNT annotation for unread badges. PostgreSQL
+    cannot reliably combine that grouped query with SELECT ... FOR UPDATE, so
+    mutation endpoints deliberately lock the base table instead.
+    """
+
+    conversation = (
+        SupportConversation.objects.select_for_update()
+        .filter(pk=pk)
+        .first()
+    )
+    if conversation is None or not _operator_can_access_conversation(
+        user,
+        conversation,
+    ):
+        raise Http404
+    return conversation
+
+
+def _conversation_queryset(user):
     return (
-        SupportConversation.objects.select_related("user", "assigned_to")
+        _operator_conversation_queryset(user)
         .annotate(
             unread_count=Count(
                 "messages",
@@ -106,7 +142,13 @@ def attachment(request, pk):
         SupportAttachment.objects.select_related("message__conversation"),
         pk=pk,
     )
-    if not request.user.is_staff and item.message.conversation.user_id != request.user.pk:
+    conversation = item.message.conversation
+    is_owner = conversation.user_id == request.user.pk
+    can_operate = is_support_operator(request.user) and (
+        request.user.is_superuser
+        or conversation.assigned_to_id in {None, request.user.pk}
+    )
+    if not is_owner and not can_operate:
         raise Http404
 
     try:
@@ -144,9 +186,9 @@ def _serialize_conversation(conversation):
 @require_GET
 @login_required
 def chat_state(request):
-    if request.user.is_staff:
+    if is_support_operator(request.user):
         return JsonResponse(
-            {"error": "Quản trị viên sử dụng Hộp thư hỗ trợ."},
+            {"error": "Đội hỗ trợ sử dụng Hộp thư cộng tác viên."},
             status=403,
         )
 
@@ -195,9 +237,9 @@ def chat_state(request):
 @require_POST
 @login_required
 def chat_send(request):
-    if request.user.is_staff:
+    if is_support_operator(request.user):
         return JsonResponse(
-            {"error": "Quản trị viên vui lòng trả lời trong Hộp thư hỗ trợ."},
+            {"error": "Đội hỗ trợ vui lòng trả lời trong Hộp thư cộng tác viên."},
             status=403,
         )
 
@@ -230,7 +272,7 @@ def chat_send(request):
         conversation.save(update_fields=("status", "last_message_at", "updated_at"))
 
         create_notifications(
-            recipient_ids=_staff_ids(),
+            recipient_ids=_operator_ids(),
             kind=Notification.Kind.SUPPORT_MESSAGE,
             title="Có tin nhắn hỗ trợ mới",
             message=(
@@ -253,9 +295,9 @@ def chat_send(request):
     )
 
 
-@staff_member_required
+@support_operator_required
 def inbox(request):
-    conversations = _conversation_queryset()
+    conversations = _conversation_queryset(request.user)
     selected = None
     selected_id = request.GET.get("conversation")
     if selected_id and selected_id.isdigit():
@@ -302,9 +344,14 @@ def inbox(request):
                 "Cảm ơn bạn đã chia sẻ. PawRescue xin phản hồi như sau: "
             )
 
+    template_name = (
+        "support/inbox.html"
+        if request.user.is_superuser
+        else "support/collaborator_inbox.html"
+    )
     return render(
         request,
-        "support/inbox.html",
+        template_name,
         {
             "conversations": conversations,
             "selected_conversation": selected,
@@ -318,22 +365,23 @@ def inbox(request):
 
 
 @require_POST
-@staff_member_required
+@support_operator_required
 def open_case_chat(request, pk):
     rescue_case = get_object_or_404(
         RescueCase.objects.select_related("reporter"),
         pk=pk,
     )
-    admin_change_url = reverse(
-        "admin:rescue_rescuecase_change",
-        args=(rescue_case.pk,),
+    return_url = (
+        reverse("admin:rescue_rescuecase_change", args=(rescue_case.pk,))
+        if request.user.is_superuser
+        else reverse("collaborators:dashboard")
     )
     if rescue_case.reporter_id is None:
         django_messages.error(
             request,
             "Ca này không có tài khoản người báo tin để mở cuộc trò chuyện.",
         )
-        return redirect(admin_change_url)
+        return redirect(return_url)
 
     with transaction.atomic():
         get_user_model().objects.select_for_update().get(
@@ -351,6 +399,16 @@ def open_case_chat(request, pk):
                 assigned_to=request.user,
                 subject=f"Trao đổi về ca #{rescue_case.pk}: {rescue_case.title}"[:180],
             )
+        elif (
+            conversation.assigned_to_id is not None
+            and conversation.assigned_to_id != request.user.pk
+            and not request.user.is_superuser
+        ):
+            django_messages.info(
+                request,
+                "Cuộc trò chuyện này đang được một cộng tác viên khác phụ trách.",
+            )
+            return redirect(return_url)
         elif conversation.assigned_to_id is None:
             conversation.assigned_to = request.user
             conversation.save(update_fields=("assigned_to", "updated_at"))
@@ -366,9 +424,9 @@ def open_case_chat(request, pk):
 
 
 @require_GET
-@staff_member_required
+@support_operator_required
 def inbox_state(request):
-    conversations = _conversation_queryset()
+    conversations = _conversation_queryset(request.user)
     selected = None
     selected_id = request.GET.get("conversation")
     if selected_id and selected_id.isdigit():
@@ -396,7 +454,7 @@ def inbox_state(request):
         }
 
     # Re-query after marking the selected thread as read so its badge is current.
-    conversations = _conversation_queryset()
+    conversations = _conversation_queryset(request.user)
     return JsonResponse(
         {
             "conversations": [
@@ -408,23 +466,28 @@ def inbox_state(request):
 
 
 @require_POST
-@staff_member_required
+@support_operator_required
 def admin_reply(request, pk):
-    form = SupportMessageForm(request.POST, request.FILES)
-    conversation = get_object_or_404(
-        SupportConversation.objects.select_related("user"),
+    # Fail closed before parsing potentially large uploads, then repeat this
+    # authorization check under the row lock immediately before mutation.
+    snapshot = get_object_or_404(
+        _operator_conversation_queryset(request.user),
         pk=pk,
     )
-    if conversation.status == SupportConversation.Status.CLOSED:
-        django_messages.error(request, "Cuộc trò chuyện này đã được đóng.")
-        return redirect(reverse("support:inbox") + f"?conversation={pk}")
+    form = SupportMessageForm(request.POST, request.FILES)
     if not form.is_valid():
         error = next(iter(form.errors.values()))[0]
         django_messages.error(request, str(error))
         return redirect(reverse("support:inbox") + f"?conversation={pk}")
 
     with transaction.atomic():
-        conversation = SupportConversation.objects.select_for_update().get(pk=pk)
+        # Keep the same user -> conversation lock order as chat_send so a
+        # simultaneous user message cannot deadlock with an operator reply.
+        get_user_model().objects.select_for_update().get(pk=snapshot.user_id)
+        conversation = _lock_operator_conversation(request.user, pk)
+        if conversation.status == SupportConversation.Status.CLOSED:
+            django_messages.error(request, "Cuộc trò chuyện này đã được đóng.")
+            return redirect(reverse("support:inbox") + f"?conversation={pk}")
         chat_message = SupportMessage.objects.create(
             conversation=conversation,
             sender=request.user,
@@ -447,7 +510,7 @@ def admin_reply(request, pk):
         create_notifications(
             recipient_ids=(conversation.user_id,),
             kind=Notification.Kind.SUPPORT_MESSAGE,
-            title="Quản trị viên đã trả lời",
+            title="Đội hỗ trợ đã trả lời",
             message=_notification_preview(chat_message),
             actor=request.user,
             target_url=reverse("rescue:case-list"),
@@ -458,22 +521,71 @@ def admin_reply(request, pk):
 
 
 @require_POST
-@staff_member_required
+@support_operator_required
 def close_conversation(request, pk):
-    conversation = get_object_or_404(
-        SupportConversation.objects.select_related("user"),
+    snapshot = get_object_or_404(
+        _operator_conversation_queryset(request.user),
         pk=pk,
     )
-    conversation.status = SupportConversation.Status.CLOSED
-    conversation.assigned_to = request.user
-    conversation.save(update_fields=("status", "assigned_to", "updated_at"))
-    create_notifications(
-        recipient_ids=(conversation.user_id,),
-        kind=Notification.Kind.SUPPORT_MESSAGE,
-        title="Cuộc trò chuyện hỗ trợ đã kết thúc",
-        message="Bạn vẫn có thể gửi tin nhắn mới nếu cần hỗ trợ thêm.",
-        actor=request.user,
-        target_url=reverse("rescue:case-list"),
-    )
+    with transaction.atomic():
+        get_user_model().objects.select_for_update().get(pk=snapshot.user_id)
+        conversation = _lock_operator_conversation(request.user, pk)
+        if conversation.status == SupportConversation.Status.CLOSED:
+            django_messages.info(request, "Cuộc trò chuyện này đã được đóng trước đó.")
+            return redirect(reverse("support:inbox") + f"?conversation={pk}")
+
+        conversation.status = SupportConversation.Status.CLOSED
+        conversation.assigned_to = request.user
+        conversation.save(update_fields=("status", "assigned_to", "updated_at"))
+        create_notifications(
+            recipient_ids=(conversation.user_id,),
+            kind=Notification.Kind.SUPPORT_MESSAGE,
+            title="Cuộc trò chuyện hỗ trợ đã kết thúc",
+            message="Bạn vẫn có thể gửi tin nhắn mới nếu cần hỗ trợ thêm.",
+            actor=request.user,
+            target_url=reverse("rescue:case-list"),
+        )
     django_messages.success(request, "Đã đóng cuộc trò chuyện.")
-    return redirect("support:inbox")
+    return redirect(reverse("support:inbox") + f"?conversation={pk}")
+
+
+@require_POST
+@support_operator_required
+def reopen_conversation(request, pk):
+    # Read only enough to establish the lock order used by chat_send:
+    # user first, then conversation. This prevents a reopened historical
+    # thread racing with a new thread created by the same user.
+    snapshot = get_object_or_404(
+        _operator_conversation_queryset(request.user),
+        pk=pk,
+    )
+    with transaction.atomic():
+        get_user_model().objects.select_for_update().get(pk=snapshot.user_id)
+        conversation = _lock_operator_conversation(request.user, pk)
+
+        if conversation.status != SupportConversation.Status.CLOSED:
+            django_messages.info(request, "Cuộc trò chuyện này đang hoạt động.")
+            return redirect(reverse("support:inbox") + f"?conversation={pk}")
+
+        has_active_conversation = (
+            SupportConversation.objects.select_for_update()
+            .filter(user_id=conversation.user_id)
+            .exclude(pk=conversation.pk)
+            .exclude(status=SupportConversation.Status.CLOSED)
+            .exists()
+        )
+        if has_active_conversation:
+            django_messages.error(
+                request,
+                "Người dùng đã có một cuộc trò chuyện đang hoạt động; "
+                "không thể mở lại luồng cũ.",
+            )
+            return redirect("support:inbox")
+
+        conversation.status = SupportConversation.Status.WAITING_ADMIN
+        if conversation.assigned_to_id is None:
+            conversation.assigned_to = request.user
+        conversation.save(update_fields=("status", "assigned_to", "updated_at"))
+
+    django_messages.success(request, "Đã mở lại cuộc trò chuyện.")
+    return redirect(reverse("support:inbox") + f"?conversation={pk}")

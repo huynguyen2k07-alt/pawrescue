@@ -1,10 +1,13 @@
+import base64
 from decimal import Decimal
+from io import StringIO
 from tempfile import TemporaryDirectory
 
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import RequestFactory, TestCase, override_settings
 
@@ -22,8 +25,14 @@ from .models import (
     Notification,
     RescueAssignment,
     RescueCase,
+    RescueCaseImage,
     RescueUpdate,
     RescueUpdateImage,
+)
+
+
+PNG_1X1 = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 )
 
 
@@ -34,6 +43,17 @@ class CommunityHomepageTests(TestCase):
             password="test-password",
             full_name="Feedback Admin",
             is_staff=True,
+        )
+        self.superuser = get_user_model().objects.create_superuser(
+            email="superuser-feedback@example.com",
+            password="test-password",
+            full_name="Feedback Superuser",
+        )
+        self.collaborator = get_user_model().objects.create_user(
+            email="collaborator-feedback@example.com",
+            password="test-password",
+            full_name="Feedback Collaborator",
+            role=get_user_model().Role.COLLABORATOR,
         )
         self.article = KnowledgeArticle.objects.create(
             title="Hướng dẫn cứu hộ an toàn",
@@ -66,6 +86,7 @@ class CommunityHomepageTests(TestCase):
             title="Chó đang cần hỗ trợ",
             description="Cần đội cứu hộ đến kiểm tra.",
             animal_type=RescueCase.AnimalType.DOG,
+            status=RescueCase.Status.VERIFIED,
             address="Quận 1",
         )
         rescued_case = RescueCase.objects.create(
@@ -122,7 +143,7 @@ class CommunityHomepageTests(TestCase):
             [cancelled_case.pk],
         )
 
-    def test_guest_feedback_is_saved_and_notifies_staff(self):
+    def test_guest_feedback_notifies_support_operators_only(self):
         response = self.client.post(
             reverse("rescue:case-list"),
             {
@@ -142,12 +163,16 @@ class CommunityHomepageTests(TestCase):
         )
         feedback = CommunityFeedback.objects.get(email="visitor@example.com")
         self.assertEqual(feedback.status, CommunityFeedback.Status.NEW)
-        self.assertTrue(
+        recipients = set(
             Notification.objects.filter(
-                recipient=self.staff,
                 kind=Notification.Kind.FEEDBACK_RECEIVED,
-            ).exists()
+            ).values_list("recipient_id", flat=True)
         )
+        self.assertEqual(
+            recipients,
+            {self.superuser.pk, self.collaborator.pk},
+        )
+        self.assertNotIn(self.staff.pk, recipients)
 
     def test_invalid_feedback_stays_on_homepage(self):
         response = self.client.post(
@@ -173,6 +198,94 @@ class CommunityHomepageTests(TestCase):
         self.assertContains(list_response, self.article.title)
         self.assertContains(detail_response, self.article.body)
         self.assertContains(detail_response, self.article.source_name)
+
+    def test_homepage_exposes_three_watercolor_actions(self):
+        response = self.client.get(reverse("rescue:case-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "images/brand/pawrescue-watercolor-actions.png",
+        )
+        self.assertContains(response, "Ủng hộ · Gây quỹ")
+        self.assertContains(response, "Tìm chủ · Nhận nuôi")
+        self.assertContains(response, "Các ca cứu hộ")
+
+    def test_team_page_shows_active_contributors_in_display_order(self):
+        second = ContributorProfile.objects.create(
+            name="Nhóm thú y cộng đồng",
+            role="Tư vấn sức khỏe",
+            bio="Hỗ trợ thông tin chăm sóc ban đầu.",
+        )
+        ContributorProfile.objects.create(
+            name="Nhóm tạm nghỉ",
+            role="Hỗ trợ",
+            bio="Không hiển thị lúc này.",
+            is_active=False,
+        )
+
+        response = self.client.get(reverse("rescue:team"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.contributor.name)
+        self.assertContains(response, second.name)
+        self.assertNotContains(response, "Nhóm tạm nghỉ")
+        contributors = list(response.context["contributors"])
+        self.assertIn(self.contributor, contributors)
+        self.assertIn(second, contributors)
+        self.assertLess(
+            contributors.index(self.contributor),
+            contributors.index(second),
+        )
+
+    def test_knowledge_article_has_public_absolute_url(self):
+        self.assertEqual(
+            self.article.get_absolute_url(),
+            reverse("rescue:knowledge-detail", args=(self.article.slug,)),
+        )
+
+
+class PublicContentSeedTests(TestCase):
+    def test_seed_command_is_idempotent(self):
+        from rescue.management.commands.seed_pawrescue_content import (
+            ARTICLES,
+            CONTRIBUTORS,
+        )
+
+        output = StringIO()
+        call_command("seed_pawrescue_content", stdout=output)
+        call_command("seed_pawrescue_content", stdout=output)
+
+        article_slugs = [article["slug"] for article in ARTICLES]
+        contributor_names = [profile["name"] for profile in CONTRIBUTORS]
+        self.assertEqual(
+            KnowledgeArticle.objects.filter(slug__in=article_slugs).count(),
+            len(article_slugs),
+        )
+        self.assertEqual(
+            ContributorProfile.objects.filter(
+                name__in=contributor_names,
+            ).count(),
+            len(contributor_names),
+        )
+        self.assertIn("Đã đồng bộ", output.getvalue())
+
+    def test_contributors_without_manual_order_are_appended(self):
+        ContributorProfile.objects.all().delete()
+
+        first = ContributorProfile.objects.create(
+            name="Nhóm một",
+            role="Điều phối",
+            bio="Mô tả nhóm một.",
+        )
+        second = ContributorProfile.objects.create(
+            name="Nhóm hai",
+            role="Chăm sóc",
+            bio="Mô tả nhóm hai.",
+        )
+
+        self.assertEqual(first.display_order, 1)
+        self.assertEqual(second.display_order, 2)
 
 
 class CommunityFeedbackAdminTests(TestCase):
@@ -286,6 +399,7 @@ class RescueCaseModelTests(TestCase):
         self.organization = RescueOrganization.objects.create(
             name="Animal Friends Rescue",
             created_by=self.reporter,
+            is_verified=True,
         )
         self.rescue_case = RescueCase.objects.create(
             title="Injured dog near the market",
@@ -363,12 +477,11 @@ class RescueCaseModelTests(TestCase):
         self.rescue_case.refresh_from_db()
         self.assertEqual(self.rescue_case.organization.name, "PawRescue")
         self.assertEqual(self.rescue_case.status, RescueCase.Status.VERIFIED)
-        self.assertTrue(
+        self.assertTrue(self.rescue_case.organization.is_system)
+        self.assertIsNone(self.rescue_case.organization.created_by)
+        self.assertFalse(
             OrganizationMembership.objects.filter(
                 organization=self.rescue_case.organization,
-                user=admin_user,
-                role=OrganizationMembership.Role.MANAGER,
-                is_active=True,
             ).exists()
         )
         self.assertTrue(
@@ -378,6 +491,33 @@ class RescueCaseModelTests(TestCase):
                 kind=Notification.Kind.CASE_CLAIMED,
             ).exists()
         )
+
+    def test_admin_cannot_accept_terminal_case(self):
+        self.rescue_case.organization = None
+        self.rescue_case.status = RescueCase.Status.CANCELLED
+        self.rescue_case.save(update_fields=("organization", "status"))
+        admin_user = get_user_model().objects.create_superuser(
+            email="terminal-admin@example.com",
+            password="test-password",
+            full_name="Terminal Admin",
+        )
+        request = RequestFactory().post(
+            "/admin/rescue/rescuecase/1/change/",
+            {"_accept_case": "1"},
+        )
+        request.user = admin_user
+
+        RescueCaseAdmin(RescueCase, AdminSite()).save_model(
+            request,
+            self.rescue_case,
+            form=None,
+            change=True,
+        )
+
+        self.rescue_case.refresh_from_db()
+        self.assertIsNone(self.rescue_case.organization)
+        self.assertEqual(self.rescue_case.status, RescueCase.Status.CANCELLED)
+        self.assertFalse(request._pawrescue_accept_processed)
 
     def test_admin_change_page_shows_accept_button_for_unassigned_case(self):
         self.rescue_case.organization = None
@@ -561,6 +701,7 @@ class RescueCaseViewTests(TestCase):
         self.organization = RescueOrganization.objects.create(
             name="City Animal Rescue",
             created_by=self.manager,
+            is_verified=True,
         )
         OrganizationMembership.objects.create(
             organization=self.organization,
@@ -583,6 +724,9 @@ class RescueCaseViewTests(TestCase):
         )
 
     def test_case_list_and_detail_are_public(self):
+        self.rescue_case.status = RescueCase.Status.VERIFIED
+        self.rescue_case.save(update_fields=("status",))
+
         list_response = self.client.get(reverse("rescue:case-list"))
         detail_response = self.client.get(
             reverse("rescue:case-detail", args=(self.rescue_case.pk,))
@@ -601,6 +745,24 @@ class RescueCaseViewTests(TestCase):
         )
 
     def test_authenticated_user_can_create_case(self):
+        user_model = get_user_model()
+        superuser = user_model.objects.create_superuser(
+            email="case-superuser@example.com",
+            password="test-password",
+            full_name="Case Superuser",
+        )
+        collaborator = user_model.objects.create_user(
+            email="case-collaborator@example.com",
+            password="test-password",
+            full_name="Case Collaborator",
+            role=user_model.Role.COLLABORATOR,
+        )
+        ordinary_staff = user_model.objects.create_user(
+            email="case-staff@example.com",
+            password="test-password",
+            full_name="Case Staff",
+            is_staff=True,
+        )
         self.client.force_login(self.manager)
         response = self.client.post(
             reverse("rescue:case-create"),
@@ -624,6 +786,112 @@ class RescueCaseViewTests(TestCase):
             reverse("rescue:case-detail", args=(created_case.pk,)),
         )
         self.assertEqual(created_case.reporter, self.manager)
+        recipients = set(
+            Notification.objects.filter(
+                rescue_case=created_case,
+                kind=Notification.Kind.CASE_REPORTED,
+            ).values_list("recipient_id", flat=True)
+        )
+        self.assertEqual(recipients, {superuser.pk, collaborator.pk})
+        self.assertNotIn(ordinary_staff.pk, recipients)
+
+    def test_reported_case_is_private_but_available_to_triage_roles(self):
+        self.rescue_case.latitude = Decimal("16.054407")
+        self.rescue_case.longitude = Decimal("108.202167")
+        self.rescue_case.is_location_private = True
+        self.rescue_case.save(
+            update_fields=("latitude", "longitude", "is_location_private")
+        )
+        detail_url = reverse("rescue:case-detail", args=(self.rescue_case.pk,))
+
+        anonymous_list = self.client.get(reverse("rescue:case-list"))
+        anonymous_map = self.client.get(reverse("rescue:case-map"))
+        self.assertNotContains(anonymous_list, self.rescue_case.title)
+        self.assertEqual(self.client.get(detail_url).status_code, 404)
+        self.assertEqual(anonymous_map.context["map_cases"], [])
+
+        self.client.force_login(self.volunteer)
+        self.assertNotContains(
+            self.client.get(reverse("rescue:case-list")),
+            self.rescue_case.title,
+        )
+        self.assertEqual(self.client.get(detail_url).status_code, 404)
+        self.assertEqual(
+            self.client.get(reverse("rescue:case-map")).context["map_cases"],
+            [],
+        )
+
+        self.rescue_case.reporter = self.reporter
+        self.rescue_case.save(update_fields=("reporter",))
+        self.client.force_login(self.reporter)
+        reporter_detail = self.client.get(detail_url)
+        self.assertEqual(reporter_detail.status_code, 200)
+        self.assertContains(
+            self.client.get(reverse("rescue:case-list")),
+            self.rescue_case.title,
+        )
+        self.assertEqual(
+            self.client.get(reverse("rescue:case-map")).context["map_cases"][0][
+                "latitude"
+            ],
+            16.054407,
+        )
+
+        collaborator = get_user_model().objects.create_user(
+            email="triage-collaborator@example.com",
+            password="test-password",
+            full_name="Triage Collaborator",
+            role=get_user_model().Role.COLLABORATOR,
+        )
+        self.client.force_login(collaborator)
+        collaborator_detail = self.client.get(detail_url)
+        self.assertEqual(collaborator_detail.status_code, 200)
+        self.assertTrue(collaborator_detail.context["can_view_contact"])
+        self.assertTrue(collaborator_detail.context["can_view_location"])
+
+        self.client.force_login(self.manager)
+        manager_detail = self.client.get(detail_url)
+        self.assertEqual(manager_detail.status_code, 200)
+        self.assertTrue(manager_detail.context["can_claim"])
+
+    def test_reported_case_image_requires_case_visibility(self):
+        self.rescue_case.reporter = self.reporter
+        self.rescue_case.save(update_fields=("reporter",))
+        with TemporaryDirectory() as private_root, override_settings(
+            PRIVATE_RESCUE_MEDIA_ROOT=private_root
+        ):
+            item = RescueCaseImage.objects.create(
+                rescue_case=self.rescue_case,
+                image=SimpleUploadedFile(
+                    "private-scene.png",
+                    PNG_1X1,
+                    content_type="image/png",
+                ),
+                uploaded_by=self.reporter,
+            )
+            image_url = reverse("rescue:case-image", args=(item.pk,))
+
+            with self.assertRaises(ValueError):
+                _ = item.image.url
+            self.assertEqual(self.client.get(image_url).status_code, 404)
+
+            self.client.force_login(self.volunteer)
+            self.assertEqual(self.client.get(image_url).status_code, 404)
+
+            self.client.force_login(self.reporter)
+            owner_response = self.client.get(image_url)
+            self.assertEqual(owner_response.status_code, 200)
+            self.assertEqual(
+                b"".join(owner_response.streaming_content),
+                PNG_1X1,
+            )
+            self.assertEqual(owner_response["Cache-Control"], "private, no-store")
+            self.assertEqual(owner_response["X-Content-Type-Options"], "nosniff")
+
+            self.rescue_case.status = RescueCase.Status.VERIFIED
+            self.rescue_case.save(update_fields=("status",))
+            self.client.logout()
+            self.assertEqual(self.client.get(image_url).status_code, 200)
 
     def test_manager_can_claim_unassigned_case(self):
         self.rescue_case.reporter = self.reporter
@@ -647,6 +915,81 @@ class RescueCaseViewTests(TestCase):
         )
         self.assertEqual(notification.rescue_case, self.rescue_case)
         self.assertFalse(notification.is_read)
+
+    def test_unverified_organization_cannot_claim_or_manage_case(self):
+        self.organization.is_verified = False
+        self.organization.save(update_fields=("is_verified", "updated_at"))
+        self.rescue_case.organization = self.organization
+        self.rescue_case.save(update_fields=("organization",))
+        self.client.force_login(self.manager)
+
+        status_response = self.client.post(
+            reverse("rescue:case-update-status", args=(self.rescue_case.pk,)),
+            {"status": RescueCase.Status.IN_PROGRESS},
+        )
+        self.rescue_case.organization = None
+        self.rescue_case.save(update_fields=("organization",))
+        claim_response = self.client.post(
+            reverse("rescue:case-claim", args=(self.rescue_case.pk,)),
+            {"organization": self.organization.pk},
+        )
+
+        self.assertEqual(status_response.status_code, 403)
+        self.assertEqual(claim_response.status_code, 302)
+        self.rescue_case.refresh_from_db()
+        self.assertIsNone(self.rescue_case.organization)
+
+    def test_unverified_organization_assignment_loses_private_case_access(self):
+        self.rescue_case.organization = self.organization
+        self.rescue_case.status = RescueCase.Status.VERIFIED
+        self.rescue_case.contact_phone = "0999888777"
+        self.rescue_case.is_location_private = True
+        self.rescue_case.latitude = Decimal("16.054407")
+        self.rescue_case.longitude = Decimal("108.202167")
+        self.rescue_case.save(
+            update_fields=(
+                "organization",
+                "status",
+                "contact_phone",
+                "is_location_private",
+                "latitude",
+                "longitude",
+            )
+        )
+        RescueAssignment.objects.create(
+            rescue_case=self.rescue_case,
+            assignee=self.volunteer,
+            assigned_by=self.manager,
+        )
+        self.organization.is_verified = False
+        self.organization.save(update_fields=("is_verified", "updated_at"))
+        self.client.force_login(self.volunteer)
+
+        detail_response = self.client.get(
+            reverse("rescue:case-detail", args=(self.rescue_case.pk,))
+        )
+        update_response = self.client.post(
+            reverse("rescue:case-add-update", args=(self.rescue_case.pk,)),
+            {"note": "Should not be accepted."},
+        )
+
+        self.assertNotContains(detail_response, "0999888777")
+        self.assertTrue(detail_response.context["map_is_approximate"])
+        self.assertEqual(update_response.status_code, 403)
+
+    def test_manager_cannot_claim_terminal_case(self):
+        self.rescue_case.status = RescueCase.Status.CANCELLED
+        self.rescue_case.save(update_fields=("status",))
+        self.client.force_login(self.manager)
+
+        response = self.client.post(
+            reverse("rescue:case-claim", args=(self.rescue_case.pk,)),
+            {"organization": self.organization.pk},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.rescue_case.refresh_from_db()
+        self.assertIsNone(self.rescue_case.organization)
 
     def test_manager_can_assign_member_and_update_status(self):
         self.rescue_case.reporter = self.reporter
@@ -705,8 +1048,14 @@ class RescueCaseViewTests(TestCase):
         self.rescue_case.latitude = Decimal("16.054407")
         self.rescue_case.longitude = Decimal("108.202167")
         self.rescue_case.is_location_private = True
+        self.rescue_case.status = RescueCase.Status.VERIFIED
         self.rescue_case.save(
-            update_fields=("latitude", "longitude", "is_location_private")
+            update_fields=(
+                "latitude",
+                "longitude",
+                "is_location_private",
+                "status",
+            )
         )
 
         response = self.client.get(reverse("rescue:case-map"))
@@ -819,6 +1168,8 @@ class RescueCaseViewTests(TestCase):
         self.assertEqual(response.context["unread_count"], 1)
 
     def test_open_notification_marks_it_read_and_redirects_to_case(self):
+        self.rescue_case.reporter = self.reporter
+        self.rescue_case.save(update_fields=("reporter",))
         notification = Notification.objects.create(
             recipient=self.reporter,
             actor=self.manager,
@@ -886,9 +1237,9 @@ class RescueCaseViewTests(TestCase):
         self.rescue_case.save(update_fields=("reporter", "organization"))
         self.client.force_login(self.manager)
         uploaded_image = SimpleUploadedFile(
-            "rescue-progress.jpg",
-            b"small-test-image",
-            content_type="image/jpeg",
+            "rescue-progress.png",
+            PNG_1X1,
+            content_type="image/png",
         )
 
         with TemporaryDirectory() as media_root, override_settings(
@@ -957,6 +1308,8 @@ class RescueCaseViewTests(TestCase):
         self.assertFalse(RescueUpdate.objects.exists())
 
     def test_rescue_updates_appear_in_public_case_timeline(self):
+        self.rescue_case.status = RescueCase.Status.VERIFIED
+        self.rescue_case.save(update_fields=("status",))
         RescueUpdate.objects.create(
             rescue_case=self.rescue_case,
             author=self.manager,

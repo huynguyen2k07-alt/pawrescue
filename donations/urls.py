@@ -10,6 +10,16 @@ urlpatterns = [
     path("new/", views.campaign_create, name="campaign-create"),
     path("dashboard/", views.dashboard, name="dashboard"),
     path("mine/", views.my_donations, name="my-donations"),
+    path(
+        "donations/<int:pk>/proof/",
+        views.donation_proof,
+        name="donation-proof",
+    ),
+    path(
+        "expenses/<int:pk>/receipt/",
+        views.expense_receipt,
+        name="expense-receipt",
+    ),
     path("<int:pk>/", views.campaign_detail, name="campaign-detail"),
     path("<int:pk>/edit/", views.campaign_update, name="campaign-update"),
     path("<int:pk>/donate/", views.donation_create, name="donation-create"),

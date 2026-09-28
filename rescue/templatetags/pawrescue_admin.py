@@ -1,5 +1,6 @@
 from django import template
 
+from accounts.permissions import is_support_operator
 from adoptions.models import AdoptionApplication, AdoptionSafetyReport
 from donations.models import Donation
 from rescue.models import Notification, RescueCase
@@ -23,32 +24,42 @@ def pawrescue_admin_dashboard(context, app_list=None):
             app_record_count += record_count
         app["record_count"] = app_record_count
 
-    active_cases = RescueCase.objects.exclude(
-        status__in=(
-            RescueCase.Status.CLOSED,
-            RescueCase.Status.CANCELLED,
+    active_cases = RescueCase.objects.none()
+    if user.has_perm("rescue.view_rescuecase"):
+        active_cases = RescueCase.objects.exclude(
+            status__in=(
+                RescueCase.Status.CLOSED,
+                RescueCase.Status.CANCELLED,
+            )
         )
-    )
-    pending_applications = AdoptionApplication.objects.filter(
-        status__in=(
-            AdoptionApplication.Status.PENDING,
-            AdoptionApplication.Status.REVIEWING,
+    pending_applications = AdoptionApplication.objects.none()
+    if user.has_perm("adoptions.view_adoptionapplication"):
+        pending_applications = AdoptionApplication.objects.filter(
+            status__in=(
+                AdoptionApplication.Status.PENDING,
+                AdoptionApplication.Status.REVIEWING,
+            )
         )
-    )
-    pending_safety_reports = AdoptionSafetyReport.objects.filter(
-        status__in=(
-            AdoptionSafetyReport.Status.PENDING,
-            AdoptionSafetyReport.Status.REVIEWING,
+    pending_safety_reports = AdoptionSafetyReport.objects.none()
+    if user.has_perm("adoptions.view_adoptionsafetyreport"):
+        pending_safety_reports = AdoptionSafetyReport.objects.filter(
+            status__in=(
+                AdoptionSafetyReport.Status.PENDING,
+                AdoptionSafetyReport.Status.REVIEWING,
+            )
         )
-    )
-    pending_donations = Donation.objects.filter(status=Donation.Status.PENDING)
+    pending_donations = Donation.objects.none()
+    if user.has_perm("donations.view_donation"):
+        pending_donations = Donation.objects.filter(status=Donation.Status.PENDING)
     unread_notifications = Notification.objects.filter(
         recipient=user,
         is_read=False,
     )
-    pending_support = SupportConversation.objects.filter(
-        status=SupportConversation.Status.WAITING_ADMIN
-    )
+    pending_support = SupportConversation.objects.none()
+    if is_support_operator(user):
+        pending_support = SupportConversation.objects.filter(
+            status=SupportConversation.Status.WAITING_ADMIN
+        )
 
     return {
         "active_case_count": active_cases.count(),

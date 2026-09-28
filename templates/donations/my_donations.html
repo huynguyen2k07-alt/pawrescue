@@ -8,7 +8,7 @@
     <div class="my-donation-list">
         {% for donation in donations %}
             <article class="panel my-donation-card">
-                <div><span class="donation-state donation-state-{{ donation.status }}">{{ donation.get_status_display }}</span><h2><a href="{% url 'donations:campaign-detail' donation.campaign_id %}">{{ donation.campaign.title }}</a></h2><p>{{ donation.campaign.organization.name }} · {{ donation.submitted_at|date:"H:i, d/m/Y" }}</p></div>
+                <div><span class="donation-state donation-state-{{ donation.status }}">{{ donation.get_status_display }}</span><h2><a href="{% url 'donations:campaign-detail' donation.campaign_id %}">{{ donation.campaign.title }}</a></h2><p>{{ donation.campaign.organization.name }} · {{ donation.submitted_at|date:"H:i, d/m/Y" }}</p>{% if donation.proof %}<a class="proof-link" href="{% url 'donations:donation-proof' donation.pk %}" target="_blank" rel="noopener">Xem minh chứng đã gửi →</a>{% endif %}</div>
                 <strong>{{ donation.amount|floatformat:"0g" }} ₫</strong>
             </article>
         {% empty %}<div class="empty-state"><span>💝</span><h2>Bạn chưa ghi nhận đóng góp nào</h2><p>Khám phá các chiến dịch đang cần cộng đồng chung tay.</p><a class="button button-primary" href="{% url 'donations:campaign-list' %}">Xem chiến dịch</a></div>{% endfor %}

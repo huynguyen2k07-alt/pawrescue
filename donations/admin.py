@@ -1,6 +1,13 @@
 from django.contrib import admin
+from django.db import models as db_models
 
 from .models import CampaignExpense, Donation, FundraisingCampaign
+from .widgets import PrivateAdminFileWidget
+
+
+PRIVATE_FILE_WIDGETS = {
+    db_models.FileField: {"widget": PrivateAdminFileWidget},
+}
 
 
 class DonationInline(admin.TabularInline):
@@ -8,6 +15,7 @@ class DonationInline(admin.TabularInline):
     extra = 0
     readonly_fields = ("submitted_at", "confirmed_at")
     autocomplete_fields = ("donor", "confirmed_by")
+    formfield_overrides = PRIVATE_FILE_WIDGETS
 
 
 class CampaignExpenseInline(admin.TabularInline):
@@ -15,6 +23,7 @@ class CampaignExpenseInline(admin.TabularInline):
     extra = 0
     readonly_fields = ("created_at",)
     autocomplete_fields = ("recorded_by",)
+    formfield_overrides = PRIVATE_FILE_WIDGETS
 
 
 @admin.register(FundraisingCampaign)
@@ -35,6 +44,7 @@ class FundraisingCampaignAdmin(admin.ModelAdmin):
 
 @admin.register(Donation)
 class DonationAdmin(admin.ModelAdmin):
+    formfield_overrides = PRIVATE_FILE_WIDGETS
     list_display = (
         "donor_name",
         "campaign",
@@ -55,6 +65,7 @@ class DonationAdmin(admin.ModelAdmin):
 
 @admin.register(CampaignExpense)
 class CampaignExpenseAdmin(admin.ModelAdmin):
+    formfield_overrides = PRIVATE_FILE_WIDGETS
     list_display = ("campaign", "category", "amount", "spent_at")
     list_filter = ("category", "spent_at", "is_receipt_public")
     search_fields = ("campaign__title", "description")

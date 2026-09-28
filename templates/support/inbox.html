@@ -40,7 +40,7 @@
                 <div class="support-conversation-avatar">{{ selected_conversation.user.full_name|default:selected_conversation.user.email|slice:':1'|upper }}</div>
                 <div><strong>{{ selected_conversation.user.full_name|default:selected_conversation.user.email }}</strong><span>{{ selected_conversation.user.email }}{% if selected_conversation.user.phone %} · {{ selected_conversation.user.phone }}{% endif %}</span></div>
                 <span class="support-thread-status support-thread-status-{{ selected_conversation.status }}" data-thread-status>{{ selected_conversation.get_status_display }}</span>
-                {% if selected_conversation.status != 'closed' %}<form method="post" action="{% url 'support:close' selected_conversation.pk %}">{% csrf_token %}<button type="submit">Đóng cuộc trò chuyện</button></form>{% endif %}
+                {% if selected_conversation.status != 'closed' %}<form method="post" action="{% url 'support:close' selected_conversation.pk %}">{% csrf_token %}<button type="submit">Đóng cuộc trò chuyện</button></form>{% else %}<form method="post" action="{% url 'support:reopen' selected_conversation.pk %}">{% csrf_token %}<button type="submit">Mở lại cuộc trò chuyện</button></form>{% endif %}
             </header>
             <div class="support-case-context"{% if not context_case and not context_feedback %} hidden{% endif %}>
                 {% if context_feedback %}
@@ -88,7 +88,7 @@
                     <div class="support-admin-attachment-preview" data-admin-attachment-preview hidden></div>
                     <div>
                         <div class="support-admin-file-control">
-                            <input id="id_support_attachments" name="attachments" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,.mov" multiple data-admin-file-input>
+                            <input id="id_support_attachments" name="attachments" type="file" accept=".jpg,.jpeg,.png,.webp,.mp4,.webm,.mov" multiple data-admin-file-input>
                             <label for="id_support_attachments">＋ Thêm ảnh/video</label>
                             <small>Tối đa 4 tệp · Ảnh 8 MB · Video 40 MB</small>
                         </div>
@@ -96,7 +96,7 @@
                     </div>
                 </form>
             {% else %}
-                <div class="support-thread-closed">Cuộc trò chuyện đã đóng. Người dùng có thể bắt đầu cuộc trò chuyện mới khi cần.</div>
+                <div class="support-thread-closed">Cuộc trò chuyện đã đóng. Có thể mở lại nếu người dùng chưa có cuộc trò chuyện khác đang hoạt động.</div>
             {% endif %}
         {% else %}
             <div class="support-thread-placeholder"><span>💬</span><h2>Chưa có tin nhắn hỗ trợ</h2><p>Các cuộc trò chuyện mới từ người dùng sẽ xuất hiện tại đây.</p></div>

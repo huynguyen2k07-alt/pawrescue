@@ -15,7 +15,7 @@ from .models import (
 
 class AnimalProfileImageInline(admin.TabularInline):
     model = AnimalProfileImage
-    extra = 0
+    extra = 1
     readonly_fields = ("uploaded_at",)
 
 
@@ -35,6 +35,13 @@ class AnimalProfileAdmin(admin.ModelAdmin):
     readonly_fields = ("published_at", "updated_at", "adopted_at")
     inlines = (AnimalProfileImageInline,)
     list_per_page = 30
+    save_on_top = True
+    view_on_site = True
+
+    def save_model(self, request, obj, form, change):
+        if obj.created_by_id is None:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
 
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(_application_count=Count("applications"))

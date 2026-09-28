@@ -1,3 +1,4 @@
+import base64
 import tempfile
 
 from django.contrib.auth import get_user_model
@@ -8,6 +9,11 @@ from django.urls import reverse
 from rescue.models import Notification, RescueCase
 
 from .models import SupportAttachment, SupportConversation, SupportMessage
+
+
+PNG_1X1 = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
 
 
 class SupportChatTests(TestCase):
@@ -34,6 +40,18 @@ class SupportChatTests(TestCase):
             email="support-admin@example.com",
             password="test-password",
             full_name="Support Admin",
+        )
+        self.collaborator = user_model.objects.create_user(
+            email="collaborator@pawrescue.local",
+            password="test-password",
+            full_name="Cộng tác viên",
+            role=user_model.Role.COLLABORATOR,
+        )
+        self.other_collaborator = user_model.objects.create_user(
+            email="other-collaborator@pawrescue.local",
+            password="test-password",
+            full_name="Cộng tác viên khác",
+            role=user_model.Role.COLLABORATOR,
         )
 
     def send_user_message(
@@ -177,9 +195,156 @@ class SupportChatTests(TestCase):
             {"body": "Không được phép"},
         )
 
-        self.assertEqual(inbox_response.status_code, 302)
-        self.assertEqual(reply_response.status_code, 302)
+        self.assertEqual(inbox_response.status_code, 403)
+        self.assertEqual(reply_response.status_code, 403)
         self.assertEqual(conversation.messages.count(), 1)
+
+    def test_collaborator_has_separate_portal_and_can_reply(self):
+        self.send_user_message("Cộng tác viên có thể hỗ trợ không?")
+        conversation = SupportConversation.objects.get(user=self.user)
+        self.client.force_login(self.collaborator)
+
+        dashboard_response = self.client.get(reverse("collaborators:dashboard"))
+        inbox_response = self.client.get(
+            reverse("support:inbox"),
+            {"conversation": conversation.pk},
+        )
+        reply_response = self.client.post(
+            reverse("support:admin-reply", args=(conversation.pk,)),
+            {"body": "Mình là cộng tác viên và đã nhận tin."},
+        )
+
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertContains(dashboard_response, "Không gian cộng tác viên")
+        self.assertEqual(inbox_response.status_code, 200)
+        self.assertContains(inbox_response, "Hộp thư PawRescue")
+        self.assertRedirects(
+            reply_response,
+            reverse("support:inbox") + f"?conversation={conversation.pk}",
+        )
+        conversation.refresh_from_db()
+        self.assertEqual(conversation.assigned_to, self.collaborator)
+
+    def test_collaborator_cannot_read_thread_assigned_to_another_operator(self):
+        self.send_user_message("Tin riêng cho người đang phụ trách.")
+        conversation = SupportConversation.objects.get(user=self.user)
+        conversation.assigned_to = self.collaborator
+        conversation.save(update_fields=("assigned_to",))
+
+        self.client.force_login(self.other_collaborator)
+        inbox_response = self.client.get(
+            reverse("support:inbox"),
+            {"conversation": conversation.pk},
+        )
+        reply_response = self.client.post(
+            reverse("support:admin-reply", args=(conversation.pk,)),
+            {"body": "Không được phép xen vào."},
+        )
+
+        self.assertEqual(inbox_response.status_code, 200)
+        self.assertNotContains(inbox_response, "Tin riêng cho người đang phụ trách.")
+        self.assertEqual(reply_response.status_code, 404)
+        self.assertEqual(conversation.messages.count(), 1)
+
+    def test_collaborator_cannot_close_or_reopen_another_operators_thread(self):
+        self.send_user_message("Tin do cộng tác viên đầu tiên phụ trách.")
+        conversation = SupportConversation.objects.get(user=self.user)
+        conversation.assigned_to = self.collaborator
+        conversation.save(update_fields=("assigned_to",))
+
+        self.client.force_login(self.other_collaborator)
+        close_response = self.client.post(
+            reverse("support:close", args=(conversation.pk,))
+        )
+
+        self.assertEqual(close_response.status_code, 404)
+        conversation.refresh_from_db()
+        self.assertNotEqual(conversation.status, SupportConversation.Status.CLOSED)
+
+        conversation.status = SupportConversation.Status.CLOSED
+        conversation.save(update_fields=("status",))
+        reopen_response = self.client.post(
+            reverse("support:reopen", args=(conversation.pk,))
+        )
+
+        self.assertEqual(reopen_response.status_code, 404)
+        conversation.refresh_from_db()
+        self.assertEqual(conversation.status, SupportConversation.Status.CLOSED)
+
+    def test_collaborator_can_close_and_reopen_owned_thread(self):
+        self.send_user_message("Hãy đóng rồi mở lại cuộc trò chuyện này.")
+        conversation = SupportConversation.objects.get(user=self.user)
+        conversation.assigned_to = self.collaborator
+        conversation.save(update_fields=("assigned_to",))
+        self.client.force_login(self.collaborator)
+
+        close_response = self.client.post(
+            reverse("support:close", args=(conversation.pk,))
+        )
+        conversation.refresh_from_db()
+
+        self.assertRedirects(
+            close_response,
+            reverse("support:inbox") + f"?conversation={conversation.pk}",
+        )
+        self.assertEqual(conversation.status, SupportConversation.Status.CLOSED)
+        self.assertEqual(conversation.assigned_to, self.collaborator)
+
+        reopen_response = self.client.post(
+            reverse("support:reopen", args=(conversation.pk,))
+        )
+        conversation.refresh_from_db()
+
+        self.assertRedirects(
+            reopen_response,
+            reverse("support:inbox") + f"?conversation={conversation.pk}",
+        )
+        self.assertEqual(
+            conversation.status,
+            SupportConversation.Status.WAITING_ADMIN,
+        )
+        self.assertEqual(conversation.assigned_to, self.collaborator)
+
+    def test_closed_thread_cannot_reopen_when_user_has_an_active_thread(self):
+        self.send_user_message("Cuộc trò chuyện cũ.")
+        closed_conversation = SupportConversation.objects.get(user=self.user)
+        self.client.force_login(self.admin)
+        self.client.post(
+            reverse("support:close", args=(closed_conversation.pk,))
+        )
+        active_conversation = SupportConversation.objects.create(
+            user=self.user,
+            subject="Cuộc trò chuyện đang hoạt động",
+        )
+
+        response = self.client.post(
+            reverse("support:reopen", args=(closed_conversation.pk,))
+        )
+
+        self.assertRedirects(response, reverse("support:inbox"))
+        closed_conversation.refresh_from_db()
+        active_conversation.refresh_from_db()
+        self.assertEqual(
+            closed_conversation.status,
+            SupportConversation.Status.CLOSED,
+        )
+        self.assertNotEqual(
+            active_conversation.status,
+            SupportConversation.Status.CLOSED,
+        )
+
+    def test_plain_staff_user_does_not_gain_support_access(self):
+        plain_staff = get_user_model().objects.create_user(
+            email="plain-staff@example.com",
+            password="test-password",
+            full_name="Nhân viên không có quyền hỗ trợ",
+            is_staff=True,
+        )
+        self.client.force_login(plain_staff)
+
+        response = self.client.get(reverse("support:inbox"))
+
+        self.assertEqual(response.status_code, 403)
 
     def test_sending_after_closed_conversation_starts_a_new_thread(self):
         self.send_user_message("Cuộc trò chuyện đầu tiên")
@@ -220,9 +385,9 @@ class SupportChatTests(TestCase):
 
     def test_user_can_send_image_without_text(self):
         image = SimpleUploadedFile(
-            "anh-hien-truong.jpg",
-            b"test-image-content",
-            content_type="image/jpeg",
+            "anh-hien-truong.png",
+            PNG_1X1,
+            content_type="image/png",
         )
 
         response = self.send_user_message(body="", attachments=[image])
@@ -239,7 +404,7 @@ class SupportChatTests(TestCase):
             attachment.media_type,
             SupportAttachment.MediaType.IMAGE,
         )
-        self.assertEqual(attachment.original_name, "anh-hien-truong.jpg")
+        self.assertEqual(attachment.original_name, "anh-hien-truong.png")
         self.assertRegex(attachment.file.name, r"^\d{4}/\d{2}/")
         payload = response.json()["message"]
         self.assertEqual(payload["attachments"][0]["media_type"], "image")
@@ -277,7 +442,7 @@ class SupportChatTests(TestCase):
         conversation = SupportConversation.objects.get(user=self.user)
         video = SimpleUploadedFile(
             "phan-hoi.mp4",
-            b"test-video-content",
+            b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom",
             content_type="video/mp4",
         )
         self.client.force_login(self.admin)
@@ -361,4 +526,4 @@ class SupportChatTests(TestCase):
 
         self.client.force_login(self.other_user)
         denied_response = self.client.get(reverse("support:inbox-state"))
-        self.assertEqual(denied_response.status_code, 302)
+        self.assertEqual(denied_response.status_code, 403)

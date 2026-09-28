@@ -1,10 +1,12 @@
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from django.db import models
+from django.urls import reverse
 from django.utils import timezone
 
 from organizations.models import RescueOrganization
 from rescue.models import RescueCase
+from rescue.uploads import sanitize_model_image
 
 
 class AnimalProfile(models.Model):
@@ -102,6 +104,9 @@ class AnimalProfile(models.Model):
     def __str__(self):
         return self.name
 
+    def get_absolute_url(self):
+        return reverse("adoptions:animal-detail", kwargs={"pk": self.pk})
+
     def mark_adopted(self):
         self.status = self.Status.ADOPTED
         self.adopted_at = timezone.now()
@@ -130,6 +135,10 @@ class AnimalProfileImage(models.Model):
 
     def __str__(self):
         return f"Image for {self.animal}"
+
+    def save(self, *args, **kwargs):
+        sanitize_model_image(self, "image")
+        return super().save(*args, **kwargs)
 
 
 class AdoptionApplication(models.Model):

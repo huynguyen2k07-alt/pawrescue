@@ -26,6 +26,7 @@ admin.site.site_url = "/"
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('collaborators/', include('accounts.collaborator_urls')),
     path('accounts/', include('accounts.urls')),
     path('organizations/', include('organizations.urls')),
     path('adoptions/', include('adoptions.urls')),

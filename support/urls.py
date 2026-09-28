@@ -18,4 +18,5 @@ urlpatterns = [
     path("inbox/state/", views.inbox_state, name="inbox-state"),
     path("inbox/<int:pk>/reply/", views.admin_reply, name="admin-reply"),
     path("inbox/<int:pk>/close/", views.close_conversation, name="close"),
+    path("inbox/<int:pk>/reopen/", views.reopen_conversation, name="reopen"),
 ]

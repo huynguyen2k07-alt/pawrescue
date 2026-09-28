@@ -1,6 +1,8 @@
 from django import forms
 from django.core.validators import FileExtensionValidator
 
+from rescue.uploads import sanitize_image_upload
+
 from .models import (
     IMAGE_EXTENSIONS,
     SUPPORT_ATTACHMENT_EXTENSIONS,
@@ -9,7 +11,6 @@ from .models import (
 
 
 IMAGE_CONTENT_TYPES = {
-    "image/gif",
     "image/jpeg",
     "image/png",
     "image/webp",
@@ -39,6 +40,7 @@ class SupportAttachmentField(forms.FileField):
             raise forms.ValidationError("Mỗi tin nhắn chỉ được gửi tối đa 4 tệp.")
 
         total_size = 0
+        validated_files = []
         for uploaded_file in cleaned_files:
             extension = uploaded_file.name.rsplit(".", 1)[-1].lower()
             maximum_size = (
@@ -51,22 +53,45 @@ class SupportAttachmentField(forms.FileField):
                 raise forms.ValidationError(
                     f"Tệp {uploaded_file.name} phải nhỏ hơn {limit}."
                 )
-            expected_content_types = (
-                IMAGE_CONTENT_TYPES
-                if extension in IMAGE_EXTENSIONS
-                else VIDEO_CONTENT_TYPES
-            )
-            if uploaded_file.content_type not in expected_content_types:
+            if extension in IMAGE_EXTENSIONS:
+                if uploaded_file.content_type not in IMAGE_CONTENT_TYPES:
+                    raise forms.ValidationError(
+                        f"Tệp {uploaded_file.name} không phải ảnh được hỗ trợ."
+                    )
+                validated_file = sanitize_image_upload(uploaded_file)
+            else:
+                if uploaded_file.content_type not in VIDEO_CONTENT_TYPES:
+                    raise forms.ValidationError(
+                        f"Tệp {uploaded_file.name} không phải video được hỗ trợ."
+                    )
+                uploaded_file.seek(0)
+                header = uploaded_file.read(16)
+                uploaded_file.seek(0)
+                is_iso_video = (
+                    extension in {"mp4", "mov"}
+                    and len(header) >= 12
+                    and header[4:8] == b"ftyp"
+                )
+                is_webm = extension == "webm" and header.startswith(
+                    b"\x1a\x45\xdf\xa3"
+                )
+                if not (is_iso_video or is_webm):
+                    raise forms.ValidationError(
+                        f"Nội dung tệp {uploaded_file.name} không phải video hợp lệ."
+                    )
+                validated_file = uploaded_file
+            if not validated_file:
                 raise forms.ValidationError(
                     f"Tệp {uploaded_file.name} không phải ảnh hoặc video được hỗ trợ."
                 )
-            total_size += uploaded_file.size
+            total_size += validated_file.size
+            validated_files.append(validated_file)
 
         if total_size > 50 * 1024 * 1024:
             raise forms.ValidationError(
                 "Tổng dung lượng tệp trong một tin nhắn phải nhỏ hơn 50 MB."
             )
-        return cleaned_files
+        return validated_files
 
 
 class SupportMessageForm(forms.Form):
@@ -92,7 +117,7 @@ class SupportMessageForm(forms.Form):
         ),
         widget=MultipleFileInput(
             attrs={
-                "accept": ".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,.mov",
+                "accept": ".jpg,.jpeg,.png,.webp,.mp4,.webm,.mov",
                 "multiple": True,
             }
         ),

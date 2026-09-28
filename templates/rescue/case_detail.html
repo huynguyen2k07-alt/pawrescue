@@ -31,7 +31,7 @@
                         <div class="image-gallery">
                             {% for item in images %}
                                 <figure>
-                                    <img src="{{ item.image.url }}" alt="{{ item.caption|default:case.title }}">
+                                    <img src="{% url 'rescue:case-image' item.pk %}" alt="{{ item.caption|default:case.title }}">
                                     {% if item.caption %}<figcaption>{{ item.caption }}</figcaption>{% endif %}
                                 </figure>
                             {% endfor %}
@@ -117,8 +117,8 @@
                                             {% if update_images %}
                                                 <div class="update-image-grid">
                                                     {% for item_image in update_images %}
-                                                        <a href="{{ item_image.image.url }}" target="_blank" rel="noopener" aria-label="Mở ảnh cập nhật {{ forloop.counter }}">
-                                                            <img src="{{ item_image.image.url }}" alt="Ảnh cập nhật cho {{ case.title }}">
+                                                        <a href="{% url 'rescue:update-image' item_image.pk %}" target="_blank" rel="noopener" aria-label="Mở ảnh cập nhật {{ forloop.counter }}">
+                                                            <img src="{% url 'rescue:update-image' item_image.pk %}" alt="Ảnh cập nhật cho {{ case.title }}">
                                                         </a>
                                                     {% endfor %}
                                                 </div>

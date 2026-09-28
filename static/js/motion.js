@@ -20,6 +20,16 @@
         ".case-card",
         ".adoption-card",
         ".campaign-card",
+        ".watercolor-action-heading",
+        ".watercolor-action",
+        ".knowledge-hub-feature",
+        ".knowledge-topic-card",
+        ".knowledge-safety-note",
+        ".team-hero-copy > *",
+        ".team-hero-photo",
+        ".team-value-grid article",
+        ".team-card",
+        ".team-callout-inner",
         ".panel",
         ".empty-state",
         ".profile-quick-links a",
@@ -96,5 +106,27 @@
         }, { passive: true });
 
         updateParallax();
+    }
+
+    const watercolorScene = document.querySelector("[data-watercolor-scene]");
+    if (watercolorScene && finePointer.matches) {
+        watercolorScene.addEventListener("pointermove", (event) => {
+            const bounds = watercolorScene.getBoundingClientRect();
+            const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+            const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+            watercolorScene.style.setProperty(
+                "--watercolor-shift-x",
+                `${(x * 7).toFixed(1)}px`,
+            );
+            watercolorScene.style.setProperty(
+                "--watercolor-shift-y",
+                `${(y * 5).toFixed(1)}px`,
+            );
+        });
+
+        watercolorScene.addEventListener("pointerleave", () => {
+            watercolorScene.style.setProperty("--watercolor-shift-x", "0px");
+            watercolorScene.style.setProperty("--watercolor-shift-y", "0px");
+        });
     }
 })();

@@ -1,7 +1,11 @@
 from django import forms
 from django.contrib.auth import get_user_model
 
-from .models import OrganizationMembership, RescueOrganization
+from .models import (
+    OrganizationMembership,
+    RescueOrganization,
+    is_reserved_organization_name,
+)
 
 
 class RescueOrganizationForm(forms.ModelForm):
@@ -32,6 +36,10 @@ class RescueOrganizationForm(forms.ModelForm):
 
     def clean_name(self):
         name = " ".join(self.cleaned_data["name"].split())
+        if is_reserved_organization_name(name):
+            raise forms.ValidationError(
+                "Tên PawRescue được dành riêng cho hệ thống."
+            )
         duplicates = RescueOrganization.objects.filter(name__iexact=name)
         if self.instance.pk:
             duplicates = duplicates.exclude(pk=self.instance.pk)

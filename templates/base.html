@@ -25,6 +25,7 @@
                 <a class="nav-link{% if request.resolver_match.url_name == 'case-list' or request.resolver_match.url_name == 'case-detail' or request.resolver_match.url_name == 'case-create' or request.resolver_match.url_name == 'my-cases' %} is-active{% endif %}" href="{% url 'rescue:case-list' %}">Cứu hộ</a>
                 <a class="nav-link{% if request.resolver_match.url_name == 'case-map' %} is-active{% endif %}" href="{% url 'rescue:case-map' %}" {% if request.resolver_match.url_name == 'case-map' %}aria-current="page"{% endif %}>Bản đồ</a>
                 <a class="nav-link{% if request.resolver_match.url_name == 'knowledge-list' or request.resolver_match.url_name == 'knowledge-detail' %} is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}">Kiến thức</a>
+                <a class="nav-link{% if request.resolver_match.url_name == 'team' %} is-active{% endif %}" href="{% url 'rescue:team' %}" {% if request.resolver_match.url_name == 'team' %}aria-current="page"{% endif %}>Đội ngũ</a>
                 <a class="nav-link{% if request.resolver_match.namespace == 'adoptions' %} is-active{% endif %}" href="{% url 'adoptions:animal-list' %}" {% if request.resolver_match.namespace == 'adoptions' %}aria-current="page"{% endif %}>Nhận nuôi</a>
                 <a class="nav-link{% if request.resolver_match.namespace == 'donations' %} is-active{% endif %}" href="{% url 'donations:campaign-list' %}" {% if request.resolver_match.namespace == 'donations' %}aria-current="page"{% endif %}>Ủng hộ</a>
             </nav>
@@ -55,7 +56,8 @@
                                 <a href="{% url 'adoptions:my-applications' %}">Đơn nhận nuôi</a>
                                 <a href="{% url 'donations:my-donations' %}">Đóng góp của tôi</a>
                                 <a href="{% url 'organizations:dashboard' %}">Không gian tổ chức</a>
-                                {% if user.is_staff %}<a href="{% url 'support:inbox' %}">Hộp thư hỗ trợ{% if support_admin_unread_count %} ({{ support_admin_unread_count }}){% endif %}</a><a href="{% url 'admin:index' %}">Trung tâm quản trị</a>{% endif %}
+                                {% if support_is_operator %}<a href="{% url 'collaborators:dashboard' %}">Khu vực cộng tác viên</a><a href="{% url 'support:inbox' %}">Hộp thư hỗ trợ{% if support_admin_unread_count %} ({{ support_admin_unread_count }}){% endif %}</a>{% endif %}
+                                {% if user.is_superuser %}<a href="{% url 'admin:index' %}">Trung tâm quản trị</a>{% endif %}
                             </nav>
                             <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Đăng xuất</button></form>
                         </div>
@@ -71,6 +73,7 @@
                             <a href="{% url 'rescue:case-list' %}">Các ca cứu hộ <span>→</span></a>
                             <a href="{% url 'rescue:case-map' %}">Bản đồ cứu hộ <span>→</span></a>
                             <a href="{% url 'rescue:knowledge-list' %}">Cẩm nang cộng đồng <span>→</span></a>
+                            <a href="{% url 'rescue:team' %}">Đội ngũ PawRescue <span>→</span></a>
                             <a href="{% url 'adoptions:animal-list' %}">Tìm bạn nhận nuôi <span>→</span></a>
                             <a href="{% url 'donations:campaign-list' %}">Quỹ cứu hộ <span>→</span></a>
                         </nav>
@@ -80,7 +83,8 @@
                                 <a href="{% url 'accounts:profile' %}">Hồ sơ cá nhân</a>
                                 <a href="{% url 'rescue:my-cases' %}">Ca của tôi</a>
                                 <a href="{% url 'organizations:dashboard' %}">Không gian tổ chức</a>
-                                {% if user.is_staff %}<a href="{% url 'support:inbox' %}">Hộp thư hỗ trợ{% if support_admin_unread_count %} ({{ support_admin_unread_count }}){% endif %}</a><a href="{% url 'admin:index' %}">Trung tâm quản trị</a>{% endif %}
+                                {% if support_is_operator %}<a href="{% url 'collaborators:dashboard' %}">Khu vực cộng tác viên</a><a href="{% url 'support:inbox' %}">Hộp thư hỗ trợ{% if support_admin_unread_count %} ({{ support_admin_unread_count }}){% endif %}</a>{% endif %}
+                                {% if user.is_superuser %}<a href="{% url 'admin:index' %}">Trung tâm quản trị</a>{% endif %}
                                 <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Đăng xuất</button></form>
                             </div>
                         {% else %}
@@ -111,13 +115,13 @@
                 <a class="brand brand-footer" href="{% url 'rescue:case-list' %}"><span class="brand-mark" aria-hidden="true">🐾</span><span class="brand-copy"><strong>Paw<span>Rescue</span></strong></span></a>
                 <p>Kết nối cộng đồng, tổ chức và những mái nhà yêu thương để mỗi động vật đều có cơ hội được cứu giúp.</p>
             </div>
-            <nav class="footer-links" aria-label="Khám phá"><strong>Khám phá</strong><a href="{% url 'rescue:case-list' %}">Các ca cứu hộ</a><a href="{% url 'rescue:case-map' %}">Bản đồ</a><a href="{% url 'rescue:knowledge-list' %}">Kiến thức</a><a href="{% url 'adoptions:animal-list' %}">Nhận nuôi</a><a href="{% url 'donations:campaign-list' %}">Quỹ cứu hộ</a></nav>
+            <nav class="footer-links" aria-label="Khám phá"><strong>Khám phá</strong><a href="{% url 'rescue:case-list' %}">Các ca cứu hộ</a><a href="{% url 'rescue:case-map' %}">Bản đồ</a><a href="{% url 'rescue:knowledge-list' %}">Kiến thức</a><a href="{% url 'rescue:team' %}">Đội ngũ</a><a href="{% url 'adoptions:animal-list' %}">Nhận nuôi</a><a href="{% url 'donations:campaign-list' %}">Quỹ cứu hộ</a></nav>
             <nav class="footer-links" aria-label="Tham gia"><strong>Tham gia</strong><a href="{% url 'rescue:case-create' %}">Báo ca cứu hộ</a>{% if user.is_authenticated %}<a href="{% url 'organizations:dashboard' %}">Không gian tổ chức</a><a href="{% url 'accounts:profile' %}">Tài khoản</a>{% else %}<a href="{% url 'accounts:register' %}">Tạo tài khoản</a><a href="{% url 'accounts:login' %}">Đăng nhập</a>{% endif %}</nav>
             <div class="footer-note"><strong>Cộng đồng nhân ái</strong><p>Mọi thay đổi lớn đều bắt đầu từ một hành động nhỏ đúng lúc.</p></div>
         </div>
         <div class="container footer-bottom"><span>© {% now "Y" %} PawRescue</span><span>Được xây dựng vì động vật và cộng đồng.</span></div>
     </footer>
-    {% if user.is_authenticated and not user.is_staff %}
+    {% if user.is_authenticated and not support_is_operator %}
         {% include "support/_widget.html" %}
     {% endif %}
     <script defer src="{% static 'js/motion.js' %}"></script>

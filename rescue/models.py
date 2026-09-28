@@ -5,9 +5,12 @@ from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db import transaction
+from django.urls import reverse
 from django.utils import timezone
 
 from organizations.models import RescueOrganization
+from .storage import private_rescue_storage
+from .uploads import sanitize_model_image
 
 
 class RescueCase(models.Model):
@@ -135,6 +138,7 @@ class RescueCaseImage(models.Model):
         related_name="images",
     )
     image = models.FileField(
+        storage=private_rescue_storage,
         upload_to="rescue_cases/%Y/%m/",
         validators=(
             FileExtensionValidator(
@@ -157,6 +161,10 @@ class RescueCaseImage(models.Model):
 
     def __str__(self):
         return f"Image for {self.rescue_case}"
+
+    def save(self, *args, **kwargs):
+        sanitize_model_image(self, "image")
+        return super().save(*args, **kwargs)
 
 
 class RescueAssignment(models.Model):
@@ -255,6 +263,7 @@ class RescueUpdateImage(models.Model):
         related_name="images",
     )
     image = models.FileField(
+        storage=private_rescue_storage,
         upload_to="rescue_updates/%Y/%m/",
         validators=(
             FileExtensionValidator(
@@ -270,9 +279,14 @@ class RescueUpdateImage(models.Model):
     def __str__(self):
         return f"Image for update #{self.update_id}"
 
+    def save(self, *args, **kwargs):
+        sanitize_model_image(self, "image")
+        return super().save(*args, **kwargs)
+
 
 class Notification(models.Model):
     class Kind(models.TextChoices):
+        CASE_REPORTED = "case_reported", "Có tin báo cứu hộ mới"
         CASE_CLAIMED = "case_claimed", "Ca đã được tiếp nhận"
         CASE_ASSIGNED = "case_assigned", "Ca đã được phân công"
         STATUS_CHANGED = "status_changed", "Trạng thái đã thay đổi"
@@ -370,6 +384,13 @@ class KnowledgeArticle(models.Model):
     def __str__(self):
         return self.title
 
+    def get_absolute_url(self):
+        return reverse("rescue:knowledge-detail", kwargs={"slug": self.slug})
+
+    def save(self, *args, **kwargs):
+        sanitize_model_image(self, "cover_image")
+        return super().save(*args, **kwargs)
+
 
 class ContributorProfile(models.Model):
     name = models.CharField(max_length=160)
@@ -397,6 +418,18 @@ class ContributorProfile(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        sanitize_model_image(self, "photo")
+        if self._state.adding and self.display_order == 0:
+            highest_order = (
+                ContributorProfile.objects.aggregate(
+                    highest=models.Max("display_order")
+                )["highest"]
+                or 0
+            )
+            self.display_order = highest_order + 1
+        return super().save(*args, **kwargs)
 
 
 class CommunityFeedback(models.Model):

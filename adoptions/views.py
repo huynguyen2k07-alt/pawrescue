@@ -45,12 +45,17 @@ def _managed_organizations(user):
     if not user.is_authenticated:
         return RescueOrganization.objects.none()
     if user.is_superuser:
-        return RescueOrganization.objects.filter(is_active=True)
+        return RescueOrganization.objects.filter(
+            is_active=True,
+            is_verified=True,
+        )
     return RescueOrganization.objects.filter(
         memberships__user=user,
         memberships__is_active=True,
         memberships__role__in=MANAGER_ROLES,
         is_active=True,
+        is_verified=True,
+        is_system=False,
     ).distinct()
 
 
@@ -61,6 +66,9 @@ def _can_manage_animal(user, animal):
         return True
     return OrganizationMembership.objects.filter(
         organization=animal.organization,
+        organization__is_active=True,
+        organization__is_verified=True,
+        organization__is_system=False,
         user=user,
         is_active=True,
         role__in=MANAGER_ROLES,
@@ -119,7 +127,10 @@ def _set_adopted_timestamp(animal):
 
 def animal_list(request):
     animals = (
-        AnimalProfile.objects.exclude(
+        AnimalProfile.objects.filter(
+            organization__is_active=True,
+            organization__is_verified=True,
+        ).exclude(
             status__in=(
                 AnimalProfile.Status.ADOPTED,
                 AnimalProfile.Status.NOT_AVAILABLE,
@@ -170,6 +181,8 @@ def animal_detail(request, pk):
             "rescue_case",
         ).prefetch_related("images"),
         pk=pk,
+        organization__is_active=True,
+        organization__is_verified=True,
     )
     existing_application = None
     if request.user.is_authenticated:
@@ -277,6 +290,8 @@ def application_create(request, pk):
         animal = get_object_or_404(
             AnimalProfile.objects.select_for_update().select_related("organization"),
             pk=pk,
+            organization__is_active=True,
+            organization__is_verified=True,
         )
         if animal.status != AnimalProfile.Status.AVAILABLE:
             messages.error(request, "Hồ sơ này hiện không nhận thêm đơn.")
@@ -558,6 +573,8 @@ def safety_report_create(request, pk):
     animal = get_object_or_404(
         AnimalProfile.objects.select_related("organization"),
         pk=pk,
+        organization__is_active=True,
+        organization__is_verified=True,
     )
     if request.method == "POST":
         form = AdoptionSafetyReportForm(request.POST)

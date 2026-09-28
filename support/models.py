@@ -7,7 +7,7 @@ from django.utils import timezone
 from .storage import private_support_storage
 
 
-IMAGE_EXTENSIONS = ("jpg", "jpeg", "png", "webp", "gif")
+IMAGE_EXTENSIONS = ("jpg", "jpeg", "png", "webp")
 VIDEO_EXTENSIONS = ("mp4", "webm", "mov")
 SUPPORT_ATTACHMENT_EXTENSIONS = IMAGE_EXTENSIONS + VIDEO_EXTENSIONS
 
@@ -37,7 +37,9 @@ class SupportConversation(models.Model):
         related_name="assigned_support_conversations",
         null=True,
         blank=True,
-        limit_choices_to={"is_staff": True},
+        limit_choices_to=(
+            models.Q(is_superuser=True) | models.Q(role="collaborator")
+        ),
     )
     status = models.CharField(
         max_length=20,
@@ -51,6 +53,9 @@ class SupportConversation(models.Model):
 
     class Meta:
         ordering = ("-last_message_at",)
+        permissions = (
+            ("handle_support", "Có thể xử lý hội thoại hỗ trợ"),
+        )
         constraints = [
             models.UniqueConstraint(
                 fields=("user",),

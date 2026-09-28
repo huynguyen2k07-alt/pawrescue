@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Không gian cộng tác viên · PawRescue{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/collaborator.css' %}">{% endblock %}
+
+{% block content %}
+<section class="collab-hero">
+    <div class="container collab-hero-inner">
+        <div>
+            <span class="section-kicker">Đội hỗ trợ cộng đồng</span>
+            <h1>Không gian cộng tác viên</h1>
+            <p>Tiếp nhận tin báo và trò chuyện với người dùng. Các thay đổi nội dung, trạng thái và cấu hình hệ thống vẫn do quản trị viên quyết định.</p>
+        </div>
+        <a class="button button-primary" href="{% url 'support:inbox' %}">Mở hộp thư{% if unread_message_count %} · {{ unread_message_count }} mới{% endif %}</a>
+    </div>
+</section>
+
+<section class="section collab-workspace">
+    <div class="container">
+        <div class="collab-metrics" aria-label="Tổng quan cộng tác viên">
+            <article><span aria-hidden="true">🐾</span><strong>{{ reported_count }}</strong><p>Tin báo mới cần theo dõi</p></article>
+            <article><span aria-hidden="true">💬</span><strong>{{ open_conversation_count }}</strong><p>Cuộc trò chuyện đang mở</p></article>
+            <article><span aria-hidden="true">✦</span><strong>{{ unread_message_count }}</strong><p>Tin nhắn chưa đọc</p></article>
+        </div>
+
+        <div class="collab-grid">
+            <section class="collab-panel">
+                <header><div><span class="section-kicker">Tin báo gần đây</span><h2>Các ca đang hoạt động</h2></div></header>
+                <div class="collab-case-list">
+                    {% for rescue_case in active_cases %}
+                        <article>
+                            <span class="collab-urgency collab-urgency-{{ rescue_case.urgency }}">{{ rescue_case.get_urgency_display }}</span>
+                            <div><strong>#{{ rescue_case.pk }} · {{ rescue_case.title }}</strong><p>{{ rescue_case.get_animal_type_display }} · {{ rescue_case.reported_at|timesince }} trước{% if rescue_case.organization %} · {{ rescue_case.organization.name }}{% endif %}</p></div>
+                            {% if rescue_case.reporter_id %}
+                                <form method="post" action="{% url 'support:open-case-chat' rescue_case.pk %}">{% csrf_token %}<button type="submit">Trò chuyện</button></form>
+                            {% else %}
+                                <span class="collab-muted">Không có tài khoản liên hệ</span>
+                            {% endif %}
+                        </article>
+                    {% empty %}<div class="empty-state"><span>✓</span><p>Chưa có ca nào cần hỗ trợ.</p></div>{% endfor %}
+                </div>
+            </section>
+
+            <aside class="collab-side">
+                <section class="collab-panel">
+                    <header><div><span class="section-kicker">Hộp thư</span><h2>Trao đổi mới</h2></div><a href="{% url 'support:inbox' %}">Xem tất cả →</a></header>
+                    <div class="collab-message-list">
+                        {% for conversation in recent_conversations %}
+                            <a href="{% url 'support:inbox' %}?conversation={{ conversation.pk }}">
+                                <span>{{ conversation.user.full_name|default:conversation.user.email|slice:':1'|upper }}</span>
+                                <div><strong>{{ conversation.user.full_name|default:conversation.user.email }}</strong><small>{{ conversation.get_status_display }} · {{ conversation.last_message_at|timesince }} trước</small></div>
+                                {% if conversation.unread_count %}<em>{{ conversation.unread_count }}</em>{% endif %}
+                            </a>
+                        {% empty %}<p class="collab-muted">Chưa có cuộc trò chuyện.</p>{% endfor %}
+                    </div>
+                </section>
+
+                <section class="collab-panel">
+                    <header><div><span class="section-kicker">Cập nhật</span><h2>Thông báo của bạn</h2></div></header>
+                    <div class="collab-notification-list">
+                        {% for notification in recent_notifications %}
+                            <a href="{{ notification.target_url|default:'#' }}"><strong>{{ notification.title }}</strong><small>{{ notification.message|truncatechars:90 }}</small><time>{{ notification.created_at|timesince }} trước</time></a>
+                        {% empty %}<p class="collab-muted">Chưa có thông báo mới.</p>{% endfor %}
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </div>
+</section>
+{% endblock %}

@@ -14,6 +14,17 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+
+def env_flag(name, default=False):
+    """Read a boolean environment variable without accepting ambiguous values."""
+    fallback = "true" if default else "false"
+    return os.getenv(name, fallback).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def env_list(name, default=""):
+    """Read a comma-separated environment variable into a clean list."""
+    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -24,11 +35,26 @@ load_dotenv(BASE_DIR / ".env")
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
-DEBUG = os.getenv("DJANGO_DEBUG") == "True"
+DEBUG = env_flag("DJANGO_DEBUG")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env_list(
+    "DJANGO_ALLOWED_HOSTS",
+    "127.0.0.1,localhost" if DEBUG else "",
+)
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+
+# Secure-by-default production cookies and HTTPS. Local development keeps working
+# while DEBUG=True; a reverse proxy can opt out of redirects during staged setup.
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env_flag("DJANGO_SECURE_SSL_REDIRECT", True)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
 
 
 # Application definition
@@ -139,6 +165,8 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 PRIVATE_SUPPORT_MEDIA_ROOT = BASE_DIR / 'private_media' / 'support'
+PRIVATE_DONATION_MEDIA_ROOT = BASE_DIR / 'private_media' / 'donations'
+PRIVATE_RESCUE_MEDIA_ROOT = BASE_DIR / 'private_media' / 'rescue'
 MAPTILER_API_KEY = os.getenv("MAPTILER_API_KEY", "").strip()
 
 LOGIN_URL = 'accounts:login'

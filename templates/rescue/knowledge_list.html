@@ -4,37 +4,93 @@
 {% block title %}Cẩm nang cộng đồng · PawRescue{% endblock %}
 
 {% block content %}
-<section class="knowledge-page-hero">
-    <div class="container">
-        <span class="eyebrow">Kiến thức có nguồn</span>
-        <h1>Cẩm nang giúp động vật<br>an toàn hơn mỗi ngày.</h1>
-        <p>Những hướng dẫn dễ hiểu dành cho người báo tin, tình nguyện viên và gia đình có thú cưng.</p>
+<section class="knowledge-page-hero knowledge-hub-hero">
+    <div class="container knowledge-hub-hero-grid">
+        <div>
+            <span class="eyebrow">Kiến thức có nguồn</span>
+            <h1>Hiểu đúng để chăm sóc<br>và cứu hộ an toàn.</h1>
+            <p>Hướng dẫn thực tế dành cho người báo tin, tình nguyện viên và mọi gia đình yêu động vật.</p>
+            <a class="button button-accent" href="#knowledge-library">Khám phá cẩm nang</a>
+        </div>
+        <div class="knowledge-hub-note" data-motion-tilt data-tilt-strength="2">
+            <span aria-hidden="true">✦</span>
+            <strong>{{ published_article_count }} bài hướng dẫn</strong>
+            <p>Nội dung có nguồn tham khảo và luôn ưu tiên lời khuyên từ bác sĩ thú y hoặc đội cứu hộ tại hiện trường.</p>
+            <small>PawRescue knowledge hub</small>
+        </div>
     </div>
 </section>
 
-<section class="section container">
-    <form class="knowledge-filters" method="get">
-        <a class="{% if not selected_category %}is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}">Tất cả</a>
-        {% for value, label in category_choices %}
-            <a class="{% if selected_category == value %}is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}?category={{ value }}">{{ label }}</a>
-        {% endfor %}
-    </form>
-    <div class="knowledge-list-grid">
-        {% for article in articles %}
-            <article class="knowledge-list-card">
-                <a class="knowledge-list-media" href="{% url 'rescue:knowledge-detail' article.slug %}">
-                    {% if article.cover_image %}<img src="{{ article.cover_image.url }}" alt="" loading="lazy">{% elif article.static_image_path %}<img src="{% static article.static_image_path %}" alt="" loading="lazy">{% endif %}
-                </a>
-                <div>
-                    <span class="knowledge-category">{{ article.get_category_display }}</span>
-                    <h2><a href="{% url 'rescue:knowledge-detail' article.slug %}">{{ article.title }}</a></h2>
-                    <p>{{ article.excerpt }}</p>
-                    <a class="knowledge-read-link" href="{% url 'rescue:knowledge-detail' article.slug %}">Đọc bài <span aria-hidden="true">→</span></a>
-                </div>
-            </article>
-        {% empty %}
-            <div class="empty-state"><h2>Chưa có bài viết phù hợp</h2><p>Hãy thử chọn một chủ đề khác.</p></div>
-        {% endfor %}
+<section class="section container knowledge-library" id="knowledge-library">
+    <div class="section-heading knowledge-library-heading">
+        <div>
+            <span class="eyebrow eyebrow-dark">Thư viện PawRescue</span>
+            <h2>Chọn điều bạn cần biết hôm nay.</h2>
+        </div>
+        <p>Từ ứng phó phút đầu đến chăm sóc dài hạn, mỗi bài đều được trình bày ngắn gọn để dễ áp dụng.</p>
     </div>
+
+    <nav class="knowledge-filters knowledge-topic-filters" aria-label="Lọc bài viết theo chủ đề">
+        <a class="{% if not selected_category %}is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}">
+            <span>Tất cả</span><strong>{{ published_article_count }}</strong>
+        </a>
+        {% for item in category_filters %}
+            <a class="{% if selected_category == item.value %}is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}?category={{ item.value }}">
+                <span>{{ item.label }}</span><strong>{{ item.count }}</strong>
+            </a>
+        {% endfor %}
+    </nav>
+
+    {% if featured_article %}
+        <article class="knowledge-hub-feature">
+            <a class="knowledge-hub-feature-media" href="{{ featured_article.get_absolute_url }}" aria-label="Đọc {{ featured_article.title }}">
+                {% if featured_article.cover_image %}
+                    <img src="{{ featured_article.cover_image.url }}" alt="" loading="eager">
+                {% elif featured_article.static_image_path %}
+                    <img src="{% static featured_article.static_image_path %}" alt="" loading="eager">
+                {% endif %}
+                <span>Nên đọc trước</span>
+            </a>
+            <div class="knowledge-hub-feature-copy">
+                <span class="knowledge-category">{{ featured_article.get_category_display }}</span>
+                <h2><a href="{{ featured_article.get_absolute_url }}">{{ featured_article.title }}</a></h2>
+                <p>{{ featured_article.excerpt }}</p>
+                <div>
+                    <span>Cập nhật {{ featured_article.published_at|date:"d/m/Y" }}</span>
+                    <a class="knowledge-read-link" href="{{ featured_article.get_absolute_url }}">Đọc hướng dẫn <span aria-hidden="true">→</span></a>
+                </div>
+            </div>
+        </article>
+    {% endif %}
+
+    {% if articles %}
+        <div class="knowledge-list-grid knowledge-hub-grid">
+            {% for article in articles %}
+                <article class="knowledge-list-card knowledge-topic-card">
+                    <a class="knowledge-list-media" href="{{ article.get_absolute_url }}" aria-label="Đọc {{ article.title }}">
+                        {% if article.cover_image %}<img src="{{ article.cover_image.url }}" alt="" loading="lazy">{% elif article.static_image_path %}<img src="{% static article.static_image_path %}" alt="" loading="lazy">{% endif %}
+                    </a>
+                    <div>
+                        <span class="knowledge-category">{{ article.get_category_display }}</span>
+                        <h2><a href="{{ article.get_absolute_url }}">{{ article.title }}</a></h2>
+                        <p>{{ article.excerpt }}</p>
+                        <a class="knowledge-read-link" href="{{ article.get_absolute_url }}">Đọc bài <span aria-hidden="true">→</span></a>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    {% elif not featured_article %}
+        <div class="empty-state">
+            <span aria-hidden="true">🌿</span>
+            <h2>Chưa có bài viết phù hợp</h2>
+            <p>Hãy thử chọn một chủ đề khác hoặc quay lại sau.</p>
+        </div>
+    {% endif %}
+
+    <aside class="knowledge-safety-note">
+        <span aria-hidden="true">＋</span>
+        <div><strong>Khi nào cần gọi người có chuyên môn?</strong><p>Nếu động vật khó thở, chảy máu nhiều, co giật, bất tỉnh hoặc có nguy cơ gây nguy hiểm, hãy giữ khoảng cách và liên hệ bác sĩ thú y hay đội cứu hộ ngay.</p></div>
+        <a class="button button-primary" href="{% url 'rescue:case-create' %}">Báo ca cứu hộ</a>
+    </aside>
 </section>
 {% endblock %}

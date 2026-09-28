@@ -50,7 +50,39 @@
     </div>
 </section>
 
-<section class="section container">
+<section class="watercolor-action-band" aria-labelledby="action-band-title">
+    <div class="container">
+        <div class="watercolor-action-heading">
+            <div>
+                <span class="eyebrow eyebrow-dark">Bạn có thể bắt đầu từ đây</span>
+                <h2 id="action-band-title">Mỗi lựa chọn là một cách trao cơ hội.</h2>
+            </div>
+            <p>Cùng cứu hộ, tìm mái ấm hoặc góp một phần nhỏ để hành trình chăm sóc được tiếp tục.</p>
+        </div>
+        <div class="watercolor-action-scene" data-watercolor-scene>
+            <img src="{% static 'images/brand/pawrescue-watercolor-actions.png' %}" alt="" loading="eager">
+            <nav class="watercolor-action-links" aria-label="Ba cách đồng hành cùng PawRescue">
+                <a class="watercolor-action" href="{% url 'donations:campaign-list' %}">
+                    <span aria-hidden="true">01</span>
+                    <strong>Ủng hộ · Gây quỹ</strong>
+                    <small>Tiếp sức cho các ca cần điều trị</small>
+                </a>
+                <a class="watercolor-action" href="{% url 'adoptions:animal-list' %}">
+                    <span aria-hidden="true">02</span>
+                    <strong>Tìm chủ · Nhận nuôi</strong>
+                    <small>Mở lòng đón một người bạn mới</small>
+                </a>
+                <a class="watercolor-action" href="#rescue-cases">
+                    <span aria-hidden="true">03</span>
+                    <strong>Các ca cứu hộ</strong>
+                    <small>Theo dõi những trường hợp cần giúp</small>
+                </a>
+            </nav>
+        </div>
+    </div>
+</section>
+
+<section class="section container" id="rescue-cases">
     <div class="section-heading">
         <div>
             <span class="eyebrow eyebrow-dark">Theo dõi hiện trường</span>
@@ -167,7 +199,7 @@
         <div class="knowledge-card-grid">
             {% for article in knowledge_articles %}
                 <article class="knowledge-card{% if forloop.first %} knowledge-card-featured{% endif %}">
-                    <a class="knowledge-card-media" href="{% url 'rescue:knowledge-detail' article.slug %}" aria-label="Đọc {{ article.title }}">
+                    <a class="knowledge-card-media" href="{{ article.get_absolute_url }}" aria-label="Đọc {{ article.title }}">
                         {% if article.cover_image %}
                             <img src="{{ article.cover_image.url }}" alt="" loading="lazy">
                         {% elif article.static_image_path %}
@@ -176,11 +208,11 @@
                     </a>
                     <div class="knowledge-card-body">
                         <span class="knowledge-category">{{ article.get_category_display }}</span>
-                        <h3><a href="{% url 'rescue:knowledge-detail' article.slug %}">{{ article.title }}</a></h3>
+                        <h3><a href="{{ article.get_absolute_url }}">{{ article.title }}</a></h3>
                         <p>{{ article.excerpt }}</p>
                         <div class="knowledge-card-footer">
                             <span>{{ article.published_at|date:"d/m/Y" }}</span>
-                            <a href="{% url 'rescue:knowledge-detail' article.slug %}">Đọc hướng dẫn <span aria-hidden="true">→</span></a>
+                            <a href="{{ article.get_absolute_url }}">Đọc hướng dẫn <span aria-hidden="true">→</span></a>
                         </div>
                     </div>
                 </article>
@@ -222,6 +254,7 @@
             <p>Các nhóm cộng tác viên đang được cập nhật.</p>
         {% endfor %}
     </div>
+    <div class="home-section-action"><a class="button button-light" href="{% url 'rescue:team' %}">Gặp toàn bộ đội ngũ</a></div>
 </section>
 
 <section class="feedback-section" id="feedback">

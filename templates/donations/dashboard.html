@@ -14,7 +14,7 @@
                 <header><div><span class="donation-state donation-state-{{ donation.status }}">{{ donation.get_status_display }}</span><h3>{{ donation.donor_name }}</h3><p>{{ donation.campaign.title }}</p></div><strong>{{ donation.amount|floatformat:"0g" }} ₫</strong></header>
                 <div class="donation-review-facts"><span>{{ donation.get_method_display }}</span><span>{{ donation.donor_email }}</span><span>{{ donation.reference_code|default:"Không có mã giao dịch" }}</span><time>{{ donation.submitted_at|date:"H:i, d/m/Y" }}</time></div>
                 {% if donation.message %}<p class="donation-message">“{{ donation.message }}”</p>{% endif %}
-                {% if donation.proof %}<a class="proof-link" href="{{ donation.proof.url }}" target="_blank" rel="noopener">Xem minh chứng chuyển khoản →</a>{% endif %}
+                {% if donation.proof %}<a class="proof-link" href="{% url 'donations:donation-proof' donation.pk %}" target="_blank" rel="noopener">Xem minh chứng chuyển khoản →</a>{% endif %}
                 {% if donation.status == 'pending' %}
                     <form class="donation-review-form" method="post" action="{% url 'donations:donation-review' donation.pk %}">{% csrf_token %}<select name="status">{% for value, label in review_status_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select><button class="button button-primary button-small" type="submit">Cập nhật</button></form>
                 {% endif %}
