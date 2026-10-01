@@ -20,6 +20,7 @@
         <div class="paw-admin-hero-actions">
             <a class="paw-admin-button" href="{% url 'support:inbox' %}">Hộp thư hỗ trợ{% if overview.pending_support_count %} · {{ overview.pending_support_count }} mới{% endif %}</a>
             <a class="paw-admin-button paw-admin-button-primary" href="{% url 'admin:adoptions_animalprofile_add' %}">＋ Đăng hồ sơ nhận nuôi</a>
+            <a class="paw-admin-button" href="{% url 'admin:adoptions_adoptioncheckinrequest_changelist' %}">Theo dõi sau nhận nuôi{% if overview.due_check_in_count %} · {{ overview.due_check_in_count }} đến hạn{% endif %}</a>
             <a class="paw-admin-button" href="{% url 'admin:rescue_rescuecase_add' %}">＋ Tạo ca cứu hộ</a>
             <a class="paw-admin-button" href="{% url 'admin:rescue_knowledgearticle_add' %}">＋ Viết bài kiến thức</a>
             <a class="paw-admin-button" href="{% url 'admin:rescue_contributorprofile_add' %}">＋ Thêm thành viên</a>

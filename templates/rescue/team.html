@@ -12,12 +12,12 @@
             <p>PawRescue là nơi người báo tin, cộng tác viên và các tổ chức địa phương phối hợp để động vật nhận đúng sự trợ giúp vào đúng lúc.</p>
             <div class="team-hero-actions">
                 <a class="button button-accent" href="{% url 'rescue:case-create' %}">Báo ca cần giúp</a>
-                <a class="button button-light" href="{% url 'rescue:case-list' %}#feedback">Gửi lời nhắn</a>
+                <a class="team-secondary-link" href="#team-directory-title">Gặp đội ngũ <span aria-hidden="true">↓</span></a>
             </div>
         </div>
         <div class="team-hero-photo" data-motion-tilt data-tilt-strength="2">
             <img src="{% static 'images/community/volunteer-dogs.jpg' %}" alt="Tình nguyện viên chăm sóc những chú chó tại nơi cứu hộ">
-            <div><strong>{{ contributor_count|stringformat:"02d" }}</strong><span>nhóm đang đồng hành</span></div>
+            <div><strong>{{ contributor_count|stringformat:"02d" }}</strong><span>nhóm đang đồng hành</span><small>Cứu hộ · Chăm sóc · Kết nối</small></div>
         </div>
     </div>
 </section>
@@ -55,7 +55,7 @@
                     <span>{{ contributor.role }}</span>
                     <h3>{{ contributor.name }}</h3>
                     <p>{{ contributor.bio }}</p>
-                    {% if contributor.photo_source_url %}<a href="{{ contributor.photo_source_url }}" target="_blank" rel="noopener noreferrer">Ảnh: {{ contributor.photo_credit }} ↗</a>{% endif %}
+                    {% if contributor.photo_credit %}<span class="contributor-credit">Ảnh: {{ contributor.photo_credit }}</span>{% endif %}
                 </div>
             </article>
         {% empty %}

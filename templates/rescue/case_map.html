@@ -50,7 +50,7 @@
     <p class="map-feedback" id="map-feedback" aria-live="polite">Đang hiển thị {{ map_cases|length }} ca có vị trí.</p>
 
     <div class="case-map-layout">
-        <div class="map aggregate-map" data-cases-map data-maptiler-key="{{ maptiler_api_key }}"></div>
+        <div class="map aggregate-map" data-cases-map data-maptiler-key="{{ maptiler_api_key }}" role="region" aria-label="Bản đồ vị trí các ca cứu hộ tại Đà Nẵng" aria-describedby="map-feedback"></div>
         <aside class="map-case-sidebar" aria-label="Danh sách ca trên bản đồ">
             <div class="map-case-list" id="map-case-list">
                 {% for case in map_cases %}

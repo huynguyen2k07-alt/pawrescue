@@ -2,8 +2,6 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from datetime import timedelta
-
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from django.http import HttpResponseForbidden
@@ -18,6 +16,7 @@ from rescue.notifications import create_notifications
 
 from .forms import (
     AdoptionApplicationForm,
+    AdoptionCheckInForm,
     AdoptionFollowUpForm,
     AdoptionReviewForm,
     AdoptionSafetyReportForm,
@@ -26,6 +25,7 @@ from .forms import (
 )
 from .models import (
     AdoptionApplication,
+    AdoptionCheckInRequest,
     AdoptionFollowUp,
     AdoptionPlacement,
     AdoptionRestriction,
@@ -350,7 +350,7 @@ def my_applications(request):
         "animal",
         "animal__organization",
         "placement",
-    ).prefetch_related("animal__images")
+    ).prefetch_related("animal__images", "placement__check_in_requests")
     return render(
         request,
         "adoptions/my_applications.html",
@@ -417,8 +417,13 @@ def dashboard(request):
     safety_reports = AdoptionSafetyReport.objects.filter(
         animal__organization__in=organizations,
     ).select_related("animal", "placement", "reporter", "reviewed_by")[:30]
-    due_follow_ups = placements.filter(
-        next_follow_up_on__lte=timezone.localdate(),
+    check_in_requests = AdoptionCheckInRequest.objects.filter(
+        placement__organization__in=organizations,
+    ).select_related("placement__animal", "placement__adopter")
+    due_follow_ups = check_in_requests.filter(
+        due_on__lte=timezone.localdate(),
+        submitted_at__isnull=True,
+        placement__is_active=True,
     ).count()
     context = {
         "applications": applications,
@@ -429,6 +434,9 @@ def dashboard(request):
         "placements": placements,
         "safety_reports": safety_reports,
         "due_follow_ups": due_follow_ups,
+        "recent_check_ins": check_in_requests.filter(
+            submitted_at__isnull=False,
+        ).order_by("-submitted_at")[:12],
         "follow_up_contact_choices": AdoptionFollowUp.ContactMethod.choices,
         "follow_up_outcome_choices": AdoptionFollowUp.Outcome.choices,
         "safety_review_status_choices": AdoptionSafetyReviewForm.base_fields[
@@ -533,7 +541,7 @@ def application_review(request, pk):
                     "organization": animal.organization,
                     "status": AdoptionPlacement.Status.ACTIVE,
                     "placed_at": now,
-                    "next_follow_up_on": timezone.localdate() + timedelta(days=14),
+                    "next_follow_up_on": None,
                     "is_active": True,
                 },
             )
@@ -566,6 +574,121 @@ def application_review(request, pk):
 
     messages.success(request, "Đơn nhận nuôi đã được cập nhật.")
     return redirect("adoptions:dashboard")
+
+
+@login_required
+def check_in(request, pk):
+    check_in_request = get_object_or_404(
+        AdoptionCheckInRequest.objects.select_related(
+            "placement__animal",
+            "placement__organization",
+            "placement__adopter",
+        ),
+        pk=pk,
+        placement__adopter=request.user,
+    )
+    if check_in_request.submitted_at:
+        messages.info(request, "Bạn đã gửi cập nhật cho mốc theo dõi này rồi.")
+        return redirect("adoptions:my-applications")
+
+    if request.method == "POST":
+        form = AdoptionCheckInForm(request.POST, instance=check_in_request)
+        if form.is_valid():
+            with transaction.atomic():
+                locked = get_object_or_404(
+                    AdoptionCheckInRequest.objects.select_for_update().select_related(
+                        "placement__animal",
+                        "placement__organization",
+                        "placement__adopter",
+                    ),
+                    pk=check_in_request.pk,
+                    placement__adopter=request.user,
+                    submitted_at__isnull=True,
+                )
+                locked_form = AdoptionCheckInForm(request.POST, instance=locked)
+                if not locked_form.is_valid():
+                    form = locked_form
+                else:
+                    completed = locked_form.save(commit=False)
+                    completed.submitted_at = timezone.now()
+                    completed.save()
+
+                    placement = completed.placement
+                    needs_attention = (
+                        completed.care_status
+                        != AdoptionCheckInRequest.CareStatus.IN_CARE
+                        or completed.wellbeing
+                        in {
+                            AdoptionCheckInRequest.Wellbeing.CONCERNING,
+                            AdoptionCheckInRequest.Wellbeing.URGENT,
+                        }
+                    )
+                    placement.last_follow_up_at = completed.submitted_at
+                    placement.status = (
+                        AdoptionPlacement.Status.NEEDS_ATTENTION
+                        if needs_attention
+                        else AdoptionPlacement.Status.ACTIVE
+                    )
+                    placement.next_follow_up_on = (
+                        placement.check_in_requests.filter(
+                            submitted_at__isnull=True,
+                        )
+                        .order_by("due_on")
+                        .values_list("due_on", flat=True)
+                        .first()
+                    )
+                    placement.save(
+                        update_fields=(
+                            "status",
+                            "last_follow_up_at",
+                            "next_follow_up_on",
+                            "updated_at",
+                        )
+                    )
+
+                    outcome = (
+                        AdoptionFollowUp.Outcome.NEEDS_ATTENTION
+                        if needs_attention
+                        else AdoptionFollowUp.Outcome.WELL
+                    )
+                    AdoptionFollowUp.objects.create(
+                        placement=placement,
+                        created_by=request.user,
+                        contact_method=AdoptionFollowUp.ContactMethod.MESSAGE,
+                        outcome=outcome,
+                        notes=(
+                            f"Cập nhật tháng {completed.milestone_month}: "
+                            f"{completed.get_care_status_display()}; "
+                            f"{completed.get_wellbeing_display()}. "
+                            f"{completed.care_summary} {completed.health_changes}"
+                        ).strip(),
+                        contacted_at=completed.submitted_at,
+                    )
+                    create_notifications(
+                        recipient_ids=_manager_ids(placement.organization),
+                        kind=Notification.Kind.ADOPTION_FOLLOW_UP,
+                        title=f"Có cập nhật mới về {placement.animal.name}",
+                        message=(
+                            f"Người nhận nuôi đã gửi phản hồi tháng "
+                            f"{completed.milestone_month}."
+                            + (" Cần kiểm tra sớm." if needs_attention else "")
+                        ),
+                        actor=request.user,
+                        target_url=reverse("adoptions:dashboard"),
+                    )
+                    messages.success(
+                        request,
+                        "Cảm ơn bạn. Tình hình của pet đã được gửi tới tổ chức phụ trách.",
+                    )
+                    return redirect("adoptions:my-applications")
+    else:
+        form = AdoptionCheckInForm(instance=check_in_request)
+
+    return render(
+        request,
+        "adoptions/check_in_form.html",
+        {"check_in": check_in_request, "form": form},
+    )
 
 
 @login_required
@@ -709,7 +832,12 @@ def placement_follow_up(request, pk):
         follow_up.save()
 
         placement.last_follow_up_at = follow_up.contacted_at
-        placement.next_follow_up_on = timezone.localdate() + timedelta(days=30)
+        placement.next_follow_up_on = (
+            placement.check_in_requests.filter(submitted_at__isnull=True)
+            .order_by("due_on")
+            .values_list("due_on", flat=True)
+            .first()
+        )
         if follow_up.outcome == AdoptionFollowUp.Outcome.WELL:
             placement.status = AdoptionPlacement.Status.ACTIVE
         elif follow_up.outcome in {

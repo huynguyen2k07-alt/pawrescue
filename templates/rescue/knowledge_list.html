@@ -31,11 +31,11 @@
     </div>
 
     <nav class="knowledge-filters knowledge-topic-filters" aria-label="Lọc bài viết theo chủ đề">
-        <a class="{% if not selected_category %}is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}">
+        <a class="{% if not selected_category %}is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}" {% if not selected_category %}aria-current="page"{% endif %}>
             <span>Tất cả</span><strong>{{ published_article_count }}</strong>
         </a>
         {% for item in category_filters %}
-            <a class="{% if selected_category == item.value %}is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}?category={{ item.value }}">
+            <a class="{% if selected_category == item.value %}is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}?category={{ item.value }}" {% if selected_category == item.value %}aria-current="page"{% endif %}>
                 <span>{{ item.label }}</span><strong>{{ item.count }}</strong>
             </a>
         {% endfor %}
@@ -84,6 +84,7 @@
             <span aria-hidden="true">🌿</span>
             <h2>Chưa có bài viết phù hợp</h2>
             <p>Hãy thử chọn một chủ đề khác hoặc quay lại sau.</p>
+            <a class="button button-primary" href="{% url 'rescue:knowledge-list' %}">Xem tất cả chủ đề</a>
         </div>
     {% endif %}
 

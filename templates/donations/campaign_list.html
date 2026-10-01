@@ -19,16 +19,16 @@
 
 <section class="section container">
     <form class="fundraising-filter" method="get">
-        <label class="sr-only" for="id_campaign_q">Tìm chiến dịch</label>
-        <input id="id_campaign_q" name="q" value="{{ query }}" placeholder="Tên chiến dịch hoặc tổ chức...">
-        <label class="sr-only" for="id_campaign_status">Trạng thái</label>
-        <select id="id_campaign_status" name="status">
+        <div class="filter-field filter-field-search"><label for="id_campaign_q">Tìm chiến dịch</label><input id="id_campaign_q" type="search" name="q" value="{{ query }}" placeholder="Tên chiến dịch hoặc tổ chức..."></div>
+        <div class="filter-field"><label for="id_campaign_status">Trạng thái</label><select id="id_campaign_status" name="status">
             <option value="">Tất cả trạng thái</option>
             {% for value, label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-        </select>
+        </select></div>
         <button class="button button-primary" type="submit">Tìm kiếm</button>
         {% if query or selected_status %}<a class="clear-filter" href="{% url 'donations:campaign-list' %}">Xóa bộ lọc</a>{% endif %}
     </form>
+
+    <div class="listing-summary"><div><span class="eyebrow eyebrow-dark">Minh bạch từng đóng góp</span><h2>Chiến dịch cứu hộ</h2></div><p><strong>{{ page_obj.paginator.count }}</strong> chiến dịch phù hợp</p></div>
 
     <div class="campaign-grid">
         {% for campaign in page_obj %}
@@ -50,7 +50,7 @@
                 </div>
             </article>
         {% empty %}
-            <div class="empty-state campaign-empty"><span>💚</span><h2>Chưa có chiến dịch phù hợp</h2><p>Các chiến dịch cứu hộ mới sẽ được công khai tại đây.</p></div>
+            <div class="empty-state campaign-empty"><span aria-hidden="true">♡</span><h2>Chưa có chiến dịch phù hợp</h2><p>Các chiến dịch cứu hộ mới sẽ được công khai tại đây.</p><a class="button button-primary" href="{% url 'donations:campaign-list' %}">Xem tất cả chiến dịch</a></div>
         {% endfor %}
     </div>
 

@@ -273,6 +273,65 @@ class AdoptionPlacement(models.Model):
         return f"{self.animal} → {self.adopter}"
 
 
+class AdoptionCheckInRequest(models.Model):
+    class Milestone(models.IntegerChoices):
+        MONTH_1 = 1, "Sau 1 tháng"
+        MONTH_2 = 2, "Sau 2 tháng"
+        MONTH_3 = 3, "Sau 3 tháng"
+
+    class CareStatus(models.TextChoices):
+        IN_CARE = "in_care", "Pet vẫn đang ở cùng tôi"
+        NEEDS_SUPPORT = "needs_support", "Tôi cần hỗ trợ chăm sóc"
+        RETURN_REQUEST = "return_request", "Tôi cần bàn giao lại cho tổ chức"
+        MISSING = "missing", "Pet đang bị thất lạc"
+
+    class Wellbeing(models.TextChoices):
+        GOOD = "good", "Khỏe mạnh, hòa nhập tốt"
+        STABLE = "stable", "Ổn định nhưng còn cần thời gian"
+        CONCERNING = "concerning", "Có dấu hiệu cần được tư vấn"
+        URGENT = "urgent", "Đang có vấn đề khẩn cấp"
+
+    placement = models.ForeignKey(
+        AdoptionPlacement,
+        on_delete=models.CASCADE,
+        related_name="check_in_requests",
+    )
+    milestone_month = models.PositiveSmallIntegerField(choices=Milestone.choices)
+    due_on = models.DateField(db_index=True)
+    notification_sent_at = models.DateTimeField(null=True, blank=True)
+    care_status = models.CharField(
+        max_length=24,
+        choices=CareStatus.choices,
+        blank=True,
+    )
+    wellbeing = models.CharField(
+        max_length=20,
+        choices=Wellbeing.choices,
+        blank=True,
+    )
+    care_summary = models.TextField(blank=True)
+    health_changes = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("due_on", "milestone_month")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("placement", "milestone_month"),
+                name="unique_placement_followup_milestone",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.placement} · tháng {self.milestone_month}"
+
+    @property
+    def is_completed(self):
+        return self.submitted_at is not None
+
+
 class AdoptionFollowUp(models.Model):
     class ContactMethod(models.TextChoices):
         PHONE = "phone", "Điện thoại"

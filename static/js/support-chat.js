@@ -219,6 +219,7 @@
     function openChat() {
         panel.hidden = false;
         toggle.setAttribute("aria-expanded", "true");
+        toggle.setAttribute("aria-label", "Đóng cửa sổ chat hỗ trợ PawRescue");
         root.classList.add("is-open");
         loadMessages();
         textarea.focus();
@@ -227,6 +228,7 @@
     function closeChat() {
         panel.hidden = true;
         toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-label", "Mở cửa sổ chat hỗ trợ PawRescue");
         root.classList.remove("is-open");
         toggle.focus();
     }

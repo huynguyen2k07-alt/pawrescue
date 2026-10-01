@@ -9,6 +9,7 @@
         class="support-chat-toggle"
         id="support-chat-toggle"
         type="button"
+        aria-label="Mở cửa sổ chat hỗ trợ PawRescue"
         aria-expanded="false"
         aria-controls="support-chat-panel"
     >
@@ -17,16 +18,16 @@
         <span class="support-chat-badge" data-support-badge {% if not support_chat_unread_count %}hidden{% endif %}>{{ support_chat_unread_count }}</span>
     </button>
 
-    <section class="support-chat-panel" id="support-chat-panel" aria-label="Chat hỗ trợ PawRescue" hidden>
+    <section class="support-chat-panel" id="support-chat-panel" role="dialog" aria-labelledby="support-chat-title" hidden>
         <header>
             <div class="support-agent-avatar" aria-hidden="true">P</div>
-            <div><strong>Hỗ trợ PawRescue</strong><span><i></i><span data-support-status>Sẵn sàng hỗ trợ</span></span></div>
+            <div><strong id="support-chat-title">Hỗ trợ PawRescue</strong><span><i></i><span data-support-status>Sẵn sàng hỗ trợ</span></span></div>
             <button type="button" data-support-close aria-label="Đóng cửa sổ chat">×</button>
         </header>
         <div class="support-chat-messages" data-support-messages aria-live="polite">
             <div class="support-chat-loading"><span></span><span></span><span></span></div>
         </div>
-        <p class="support-chat-feedback" data-support-feedback hidden></p>
+        <p class="support-chat-feedback" data-support-feedback aria-live="polite" hidden></p>
         <form class="support-chat-form" data-support-form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <div class="support-chat-attachment-preview" data-support-attachment-preview hidden></div>

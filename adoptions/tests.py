@@ -1,5 +1,4 @@
 import base64
-from datetime import timedelta
 from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
@@ -13,6 +12,7 @@ from rescue.models import Notification, RescueCase
 
 from .models import (
     AdoptionApplication,
+    AdoptionCheckInRequest,
     AdoptionFollowUp,
     AdoptionPlacement,
     AdoptionRestriction,
@@ -20,6 +20,7 @@ from .models import (
     AnimalProfile,
     AnimalProfileImage,
 )
+from .reminders import add_months, dispatch_due_follow_up_reminders
 
 
 PNG_1X1 = base64.b64decode(
@@ -143,6 +144,14 @@ class AdoptionWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Mướp")
         self.assertNotContains(response, adopted.name)
+        self.assertContains(response, "Bạn đang tìm ai?")
+        self.assertContains(response, "Nhận nuôi có trách nhiệm")
+        self.assertContains(
+            response,
+            "<p><strong>1</strong> hồ sơ phù hợp</p>",
+            html=True,
+        )
+        self.assertContains(response, "images/community/shelter-cat.jpg")
 
     def test_catalog_filters_by_animal_type_and_age(self):
         AnimalProfile.objects.create(
@@ -265,8 +274,82 @@ class AdoptionWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Trung tâm vận hành")
         self.assertContains(response, "Đơn nhận nuôi mới")
+        self.assertContains(response, "Theo dõi sau nhận nuôi")
         self.assertContains(response, self.animal.name)
         self.assertContains(response, "pawrescue_admin.css")
+
+    def test_admin_can_publish_edit_and_delete_animal_profile(self):
+        self.client.force_login(self.admin)
+        add_url = reverse("admin:adoptions_animalprofile_add")
+        profile_data = {
+            "organization": str(self.organization.pk),
+            "rescue_case": "",
+            "created_by": "",
+            "name": "Bông",
+            "animal_type": AnimalProfile.AnimalType.DOG,
+            "breed": "Chó ta",
+            "sex": AnimalProfile.Sex.FEMALE,
+            "age_group": AnimalProfile.AgeGroup.YOUNG,
+            "estimated_age": "8 tháng",
+            "size": AnimalProfile.Size.MEDIUM,
+            "color": "Trắng nâu",
+            "description": "Bông thân thiện và đang tìm gia đình mới.",
+            "temperament": "Hiền, thích gần người.",
+            "health_status": "Đã kiểm tra sức khỏe.",
+            "vaccination_status": AnimalProfile.VaccinationStatus.PARTIAL,
+            "special_needs": "",
+            "location": "Đà Nẵng",
+            "status": AnimalProfile.Status.AVAILABLE,
+            "images-TOTAL_FORMS": "1",
+            "images-INITIAL_FORMS": "0",
+            "images-MIN_NUM_FORMS": "0",
+            "images-MAX_NUM_FORMS": "1000",
+            "_save": "Lưu lại",
+        }
+
+        create_response = self.client.post(add_url, profile_data)
+
+        self.assertEqual(create_response.status_code, 302)
+        profile = AnimalProfile.objects.get(name="Bông")
+        self.assertEqual(profile.created_by, self.admin)
+        public_list = self.client.get(reverse("adoptions:animal-list"))
+        self.assertContains(public_list, profile.name)
+
+        profile_data["name"] = "Bông Đà Nẵng"
+        profile_data["images-TOTAL_FORMS"] = "1"
+        update_response = self.client.post(
+            reverse(
+                "admin:adoptions_animalprofile_change",
+                args=(profile.pk,),
+            ),
+            profile_data,
+        )
+
+        self.assertEqual(update_response.status_code, 302)
+        profile.refresh_from_db()
+        self.assertEqual(profile.name, "Bông Đà Nẵng")
+        self.assertContains(
+            self.client.get(reverse("adoptions:animal-list")),
+            profile.name,
+        )
+
+        delete_response = self.client.post(
+            reverse(
+                "admin:adoptions_animalprofile_delete",
+                args=(profile.pk,),
+            ),
+            {"post": "yes"},
+        )
+
+        self.assertEqual(delete_response.status_code, 302)
+        self.assertFalse(AnimalProfile.objects.filter(pk=profile.pk).exists())
+        public_list = self.client.get(reverse("adoptions:animal-list"))
+        self.assertFalse(
+            any(
+                animal.name == "Bông Đà Nẵng"
+                for animal in public_list.context["page_obj"].object_list
+            )
+        )
 
     def test_application_requires_complete_safety_pledge(self):
         self.client.force_login(self.applicant)
@@ -361,7 +444,17 @@ class AdoptionWorkflowTests(TestCase):
         self.assertTrue(placement.is_active)
         self.assertEqual(
             placement.next_follow_up_on,
-            timezone.localdate() + timedelta(days=14),
+            add_months(timezone.localdate(), 1),
+        )
+        self.assertEqual(placement.check_in_requests.count(), 3)
+        self.assertEqual(
+            list(
+                placement.check_in_requests.values_list(
+                    "milestone_month",
+                    flat=True,
+                )
+            ),
+            [1, 2, 3],
         )
         self.assertTrue(
             Notification.objects.filter(
@@ -537,3 +630,91 @@ class AdoptionWorkflowTests(TestCase):
                 is_active=True,
             ).exists()
         )
+
+    def test_due_monthly_reminder_is_sent_once(self):
+        application = self.create_application()
+        placement = AdoptionPlacement.objects.create(
+            application=application,
+            animal=self.animal,
+            adopter=self.applicant,
+            organization=self.organization,
+        )
+        reminder = placement.check_in_requests.get(milestone_month=1)
+        reminder.due_on = timezone.localdate()
+        reminder.save(update_fields=("due_on", "updated_at"))
+
+        first_count = dispatch_due_follow_up_reminders()
+        second_count = dispatch_due_follow_up_reminders()
+
+        reminder.refresh_from_db()
+        self.assertEqual(first_count, 1)
+        self.assertEqual(second_count, 0)
+        self.assertIsNotNone(reminder.notification_sent_at)
+        self.assertEqual(
+            Notification.objects.filter(
+                recipient=self.applicant,
+                kind=Notification.Kind.ADOPTION_FOLLOW_UP,
+                target_url=reverse("adoptions:check-in", args=(reminder.pk,)),
+            ).count(),
+            1,
+        )
+
+    def test_adopter_can_submit_monthly_check_in_and_manager_is_notified(self):
+        application = self.create_application()
+        placement = AdoptionPlacement.objects.create(
+            application=application,
+            animal=self.animal,
+            adopter=self.applicant,
+            organization=self.organization,
+        )
+        reminder = placement.check_in_requests.get(milestone_month=1)
+        reminder.notification_sent_at = timezone.now()
+        reminder.save(update_fields=("notification_sent_at", "updated_at"))
+        self.client.force_login(self.applicant)
+
+        response = self.client.post(
+            reverse("adoptions:check-in", args=(reminder.pk,)),
+            {
+                "care_status": AdoptionCheckInRequest.CareStatus.IN_CARE,
+                "wellbeing": AdoptionCheckInRequest.Wellbeing.GOOD,
+                "care_summary": "Bé ăn ngủ tốt và đã quen với gia đình.",
+                "health_changes": "Không có thay đổi bất thường.",
+            },
+        )
+
+        self.assertRedirects(response, reverse("adoptions:my-applications"))
+        reminder.refresh_from_db()
+        placement.refresh_from_db()
+        self.assertIsNotNone(reminder.submitted_at)
+        self.assertIsNotNone(placement.last_follow_up_at)
+        self.assertEqual(placement.status, AdoptionPlacement.Status.ACTIVE)
+        self.assertTrue(
+            AdoptionFollowUp.objects.filter(
+                placement=placement,
+                created_by=self.applicant,
+                outcome=AdoptionFollowUp.Outcome.WELL,
+            ).exists()
+        )
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.manager,
+                kind=Notification.Kind.ADOPTION_FOLLOW_UP,
+            ).exists()
+        )
+
+    def test_non_adopter_cannot_open_monthly_check_in(self):
+        application = self.create_application()
+        placement = AdoptionPlacement.objects.create(
+            application=application,
+            animal=self.animal,
+            adopter=self.applicant,
+            organization=self.organization,
+        )
+        reminder = placement.check_in_requests.get(milestone_month=1)
+        self.client.force_login(self.outsider)
+
+        response = self.client.get(
+            reverse("adoptions:check-in", args=(reminder.pk,))
+        )
+
+        self.assertEqual(response.status_code, 404)

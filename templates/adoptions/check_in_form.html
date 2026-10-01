@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Cập nhật tình hình {{ check_in.placement.animal.name }} · PawRescue{% endblock %}
+
+{% block content %}
+<section class="check-in-page">
+    <div class="container check-in-layout">
+        <aside class="check-in-summary">
+            <span class="eyebrow">Đồng hành sau nhận nuôi</span>
+            <strong class="check-in-month">Tháng {{ check_in.milestone_month }}</strong>
+            <h1>{{ check_in.placement.animal.name }} dạo này thế nào?</h1>
+            <p>Phản hồi của bạn giúp tổ chức biết pet đang hòa nhập tốt hay cần hỗ trợ thêm. Thông tin này chỉ dành cho đội ngũ phụ trách hồ sơ.</p>
+            <div class="check-in-pet-facts">
+                <span>Bàn giao {{ check_in.placement.placed_at|date:"d/m/Y" }}</span>
+                <span>{{ check_in.placement.organization.name }}</span>
+                <span>Hạn cập nhật {{ check_in.due_on|date:"d/m/Y" }}</span>
+            </div>
+        </aside>
+        <div class="panel check-in-form-panel">
+            <div><span class="section-kicker">Bản cập nhật ngắn</span><h2>Chia sẻ tình hình hiện tại</h2><p>Không cần viết dài; hãy cho đội ngũ biết những thay đổi quan trọng nhất.</p></div>
+            <form method="post" class="stack-form">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+                {% for field in form %}
+                    <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span aria-hidden="true"> *</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                    {{ field.errors }}
+                {% endfor %}
+                <button class="button button-primary" type="submit">Gửi cập nhật cho PawRescue</button>
+            </form>
+        </div>
+    </div>
+</section>
+{% endblock %}

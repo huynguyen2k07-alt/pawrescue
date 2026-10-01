@@ -1,7 +1,12 @@
 from django import template
+from django.utils import timezone
 
 from accounts.permissions import is_support_operator
-from adoptions.models import AdoptionApplication, AdoptionSafetyReport
+from adoptions.models import (
+    AdoptionApplication,
+    AdoptionCheckInRequest,
+    AdoptionSafetyReport,
+)
 from donations.models import Donation
 from rescue.models import Notification, RescueCase
 from support.models import SupportConversation
@@ -48,6 +53,13 @@ def pawrescue_admin_dashboard(context, app_list=None):
                 AdoptionSafetyReport.Status.REVIEWING,
             )
         )
+    due_check_ins = AdoptionCheckInRequest.objects.none()
+    if user.has_perm("adoptions.view_adoptioncheckinrequest"):
+        due_check_ins = AdoptionCheckInRequest.objects.filter(
+            due_on__lte=timezone.localdate(),
+            submitted_at__isnull=True,
+            placement__is_active=True,
+        )
     pending_donations = Donation.objects.none()
     if user.has_perm("donations.view_donation"):
         pending_donations = Donation.objects.filter(status=Donation.Status.PENDING)
@@ -68,6 +80,7 @@ def pawrescue_admin_dashboard(context, app_list=None):
         ).count(),
         "pending_application_count": pending_applications.count(),
         "pending_safety_count": pending_safety_reports.count(),
+        "due_check_in_count": due_check_ins.count(),
         "pending_donation_count": pending_donations.count(),
         "unread_notification_count": unread_notifications.count(),
         "pending_support_count": pending_support.count(),

@@ -4,6 +4,7 @@ from django.utils.html import format_html
 
 from .models import (
     AdoptionApplication,
+    AdoptionCheckInRequest,
     AdoptionFollowUp,
     AdoptionPlacement,
     AdoptionRestriction,
@@ -106,6 +107,24 @@ class AdoptionFollowUpInline(admin.TabularInline):
     readonly_fields = ("created_at",)
 
 
+class AdoptionCheckInRequestInline(admin.TabularInline):
+    model = AdoptionCheckInRequest
+    extra = 0
+    fields = (
+        "milestone_month",
+        "due_on",
+        "notification_sent_at",
+        "care_status",
+        "wellbeing",
+        "submitted_at",
+    )
+    readonly_fields = fields
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(AdoptionPlacement)
 class AdoptionPlacementAdmin(admin.ModelAdmin):
     list_display = (
@@ -120,7 +139,7 @@ class AdoptionPlacementAdmin(admin.ModelAdmin):
     search_fields = ("animal__name", "adopter__email", "adopter__full_name")
     autocomplete_fields = ("application", "animal", "adopter", "organization")
     readonly_fields = ("created_at", "updated_at")
-    inlines = (AdoptionFollowUpInline,)
+    inlines = (AdoptionCheckInRequestInline, AdoptionFollowUpInline)
     list_select_related = ("animal", "adopter", "organization", "application")
     list_per_page = 30
 
@@ -131,6 +150,32 @@ class AdoptionFollowUpAdmin(admin.ModelAdmin):
     list_filter = ("outcome", "contact_method")
     autocomplete_fields = ("placement", "created_by")
     readonly_fields = ("created_at",)
+
+
+@admin.register(AdoptionCheckInRequest)
+class AdoptionCheckInRequestAdmin(admin.ModelAdmin):
+    list_display = (
+        "placement",
+        "milestone_month",
+        "due_on",
+        "notification_sent_at",
+        "wellbeing",
+        "submitted_at",
+    )
+    list_filter = ("milestone_month", "care_status", "wellbeing", "due_on")
+    search_fields = (
+        "placement__animal__name",
+        "placement__adopter__email",
+        "placement__adopter__full_name",
+    )
+    autocomplete_fields = ("placement",)
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "notification_sent_at",
+        "submitted_at",
+    )
+    list_select_related = ("placement__animal", "placement__adopter")
 
 
 @admin.register(AdoptionSafetyReport)

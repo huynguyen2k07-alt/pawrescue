@@ -8,6 +8,7 @@ from rescue.uploads import sanitize_image_upload
 
 from .models import (
     AdoptionApplication,
+    AdoptionCheckInRequest,
     AdoptionFollowUp,
     AdoptionSafetyReport,
     AnimalProfile,
@@ -265,6 +266,42 @@ class AdoptionFollowUpForm(forms.ModelForm):
             "notes": "Ghi chú và bằng chứng",
         }
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
+
+
+class AdoptionCheckInForm(forms.ModelForm):
+    class Meta:
+        model = AdoptionCheckInRequest
+        fields = (
+            "care_status",
+            "wellbeing",
+            "care_summary",
+            "health_changes",
+        )
+        labels = {
+            "care_status": "Hiện tại pet đang ở đâu?",
+            "wellbeing": "Tình trạng chung của pet",
+            "care_summary": "Pet đã ăn uống, sinh hoạt và hòa nhập thế nào?",
+            "health_changes": "Thay đổi sức khỏe hoặc điều bạn cần hỗ trợ",
+        }
+        widgets = {
+            "care_summary": forms.Textarea(
+                attrs={
+                    "rows": 5,
+                    "placeholder": "Chia sẻ thói quen ăn uống, vận động, tính cách và việc hòa nhập...",
+                }
+            ),
+            "health_changes": forms.Textarea(
+                attrs={
+                    "rows": 4,
+                    "placeholder": "Có thể để trống nếu pet vẫn khỏe và không có thay đổi.",
+                }
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name in ("care_status", "wellbeing", "care_summary"):
+            self.fields[field_name].required = True
 
 
 class AdoptionSafetyReportForm(forms.ModelForm):

@@ -5,3 +5,6 @@ class AdoptionsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "adoptions"
     verbose_name = "Nhận nuôi"
+
+    def ready(self):
+        from . import signals  # noqa: F401

@@ -1,21 +1,27 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Tìm bạn đồng hành · PawRescue{% endblock %}
 
 {% block content %}
 <section class="adoption-hero">
     <div class="container adoption-hero-inner">
-        <div>
+        <div class="adoption-hero-copy">
             <span class="eyebrow">Một mái nhà mới</span>
             <h1>Tìm người bạn phù hợp với gia đình bạn.</h1>
             <p>Mỗi hồ sơ đều được chăm sóc và xác minh bởi một tổ chức cứu hộ.</p>
+            {% if user.is_authenticated %}
+                <div class="heading-actions">
+                    <a class="button button-light" href="{% url 'adoptions:my-applications' %}">Đơn của tôi</a>
+                    {% if can_manage_adoptions %}<a class="button button-accent" href="{% url 'adoptions:dashboard' %}">Khu vực quản trị</a>{% endif %}
+                </div>
+            {% endif %}
         </div>
-        {% if user.is_authenticated %}
-            <div class="heading-actions">
-                <a class="button button-light" href="{% url 'adoptions:my-applications' %}">Đơn của tôi</a>
-                {% if can_manage_adoptions %}<a class="button button-accent" href="{% url 'adoptions:dashboard' %}">Khu vực quản trị</a>{% endif %}
-            </div>
-        {% endif %}
+        <div class="adoption-hero-visual" aria-label="Những động vật đang chờ một mái nhà mới">
+            <figure class="adoption-hero-photo adoption-hero-photo-main"><img src="{% static 'images/community/shelter-cat.jpg' %}" alt="Chú mèo tại nơi chăm sóc tạm thời"></figure>
+            <figure class="adoption-hero-photo adoption-hero-photo-small"><img src="{% static 'images/community/dog-cooling.jpg' %}" alt="Chú chó được chăm sóc và làm mát"></figure>
+            <div class="adoption-hero-badge"><strong>Nhận nuôi có trách nhiệm</strong><span>Được xác minh và theo dõi sau bàn giao</span></div>
+        </div>
     </div>
 </section>
 
@@ -30,33 +36,31 @@
 
 <section class="section container">
     <form class="adoption-filter-bar" method="get">
-        <label class="sr-only" for="id_adoption_q">Tìm kiếm</label>
-        <input id="id_adoption_q" name="q" value="{{ query }}" placeholder="Tên, giống hoặc khu vực...">
-        <label class="sr-only" for="id_animal_type">Loại động vật</label>
-        <select id="id_animal_type" name="animal_type">
-            <option value="">Tất cả động vật</option>
+        <div class="filter-field filter-field-search"><label for="id_adoption_q">Bạn đang tìm ai?</label><input id="id_adoption_q" type="search" name="q" value="{{ query }}" placeholder="Tên, giống hoặc khu vực..."></div>
+        <div class="filter-field"><label for="id_animal_type">Loại động vật</label><select id="id_animal_type" name="animal_type">
+            <option value="">Tất cả</option>
             {% for value, label in animal_type_choices %}<option value="{{ value }}" {% if selected_animal_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-        </select>
-        <label class="sr-only" for="id_age_group">Độ tuổi</label>
-        <select id="id_age_group" name="age_group">
-            <option value="">Mọi độ tuổi</option>
+        </select></div>
+        <div class="filter-field"><label for="id_age_group">Độ tuổi</label><select id="id_age_group" name="age_group">
+            <option value="">Tất cả</option>
             {% for value, label in age_group_choices %}<option value="{{ value }}" {% if selected_age_group == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-        </select>
-        <label class="sr-only" for="id_sex">Giới tính</label>
-        <select id="id_sex" name="sex">
-            <option value="">Mọi giới tính</option>
+        </select></div>
+        <div class="filter-field"><label for="id_sex">Giới tính</label><select id="id_sex" name="sex">
+            <option value="">Tất cả</option>
             {% for value, label in sex_choices %}<option value="{{ value }}" {% if selected_sex == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-        </select>
+        </select></div>
         <button class="button button-primary" type="submit">Tìm kiếm</button>
         {% if query or selected_animal_type or selected_age_group or selected_sex %}<a class="clear-filter" href="{% url 'adoptions:animal-list' %}">Xóa bộ lọc</a>{% endif %}
     </form>
+
+    <div class="listing-summary"><div><span class="eyebrow eyebrow-dark">Những người bạn đang chờ</span><h2>Hồ sơ nhận nuôi</h2></div><p><strong>{{ page_obj.paginator.count }}</strong> hồ sơ phù hợp</p></div>
 
     <div class="adoption-grid">
         {% for animal in page_obj %}
             <article class="adoption-card">
                 <a class="adoption-card-media" href="{% url 'adoptions:animal-detail' animal.pk %}">
                     {% with primary=animal.images.all.0 %}
-                        {% if primary %}<img src="{{ primary.image.url }}" alt="{{ animal.name }}">{% else %}<span aria-hidden="true">🐾</span>{% endif %}
+                        {% if primary %}<img src="{{ primary.image.url }}" alt="{{ animal.name }}">{% else %}<span class="pet-placeholder" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="9" cy="9" r="4"/><circle cx="23" cy="9" r="4"/><circle cx="5.5" cy="18" r="3.5"/><circle cx="26.5" cy="18" r="3.5"/><path d="M16 13c-5.2 0-9 5.1-7.4 9.5 1.2 3.2 4.3 2.7 7.4 1.6 3.1 1.1 6.2 1.6 7.4-1.6C25 18.1 21.2 13 16 13Z"/></svg></span>{% endif %}
                     {% endwith %}
                     <span class="adoption-status adoption-status-{{ animal.status }}">{{ animal.get_status_display }}</span>
                 </a>
@@ -78,6 +82,7 @@
                 <span aria-hidden="true">🏡</span>
                 <h2>Chưa tìm thấy hồ sơ phù hợp</h2>
                 <p>Hãy thử thay đổi bộ lọc hoặc quay lại sau để gặp thêm những người bạn mới.</p>
+                <a class="button button-primary" href="{% url 'adoptions:animal-list' %}">Xem tất cả hồ sơ</a>
             </div>
         {% endfor %}
     </div>

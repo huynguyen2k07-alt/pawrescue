@@ -3,6 +3,7 @@ from decimal import Decimal
 from io import StringIO
 from tempfile import TemporaryDirectory
 
+from django.contrib import admin
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -10,8 +11,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import RequestFactory, TestCase, override_settings
-
 from django.urls import reverse
+from django.utils import timezone
 
 from organizations.models import OrganizationMembership, RescueOrganization
 from support.models import SupportConversation
@@ -71,6 +72,8 @@ class CommunityHomepageTests(TestCase):
             role="Điều phối cộng đồng",
             bio="Hỗ trợ kết nối các ca cần giúp.",
             static_image_path="images/community/volunteer-dogs.jpg",
+            photo_credit="Mia X / Pexels",
+            photo_source_url="https://example.com/contributor-photo",
         )
 
     def test_homepage_shows_knowledge_contributors_and_feedback_form(self):
@@ -79,7 +82,11 @@ class CommunityHomepageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.article.title)
         self.assertContains(response, self.contributor.name)
+        self.assertContains(response, "Ảnh: Mia X / Pexels")
+        self.assertNotContains(response, self.contributor.photo_source_url)
         self.assertContains(response, "Gửi góp ý cho PawRescue")
+        self.assertContains(response, 'aria-current="page"')
+        self.assertContains(response, "report-cta-icon")
 
     def test_homepage_uses_simple_status_tabs_and_rescue_archive(self):
         active_case = RescueCase.objects.create(
@@ -113,6 +120,8 @@ class CommunityHomepageTests(TestCase):
         self.assertContains(response, "Đã hủy")
         self.assertContains(response, "Đã giải cứu thành công")
         self.assertNotContains(response, 'id="id_status"')
+        self.assertContains(response, '?status=verified#rescue-cases')
+        self.assertContains(response, 'action="/#rescue-cases"')
         self.assertEqual(
             [item.pk for item in response.context["page_obj"].object_list],
             [active_case.pk],
@@ -229,6 +238,8 @@ class CommunityHomepageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.contributor.name)
         self.assertContains(response, second.name)
+        self.assertContains(response, "Ảnh: Mia X / Pexels")
+        self.assertNotContains(response, self.contributor.photo_source_url)
         self.assertNotContains(response, "Nhóm tạm nghỉ")
         contributors = list(response.context["contributors"])
         self.assertIn(self.contributor, contributors)
@@ -381,6 +392,109 @@ class CommunityFeedbackAdminTests(TestCase):
         self.feedback.refresh_from_db()
         self.assertEqual(self.feedback.status, CommunityFeedback.Status.CLOSED)
         self.assertIsNotNone(self.feedback.reviewed_at)
+
+
+class AdminSiteSmokeTests(TestCase):
+    def setUp(self):
+        self.superuser = get_user_model().objects.create_superuser(
+            email="admin-smoke@example.com",
+            password="test-password",
+            full_name="Admin Smoke Test",
+        )
+        self.client.force_login(self.superuser)
+
+    def test_registered_admin_lists_and_add_forms_load(self):
+        request = RequestFactory().get("/admin/")
+        request.user = self.superuser
+
+        for model, model_admin in admin.site._registry.items():
+            options = model._meta
+            with self.subTest(model=options.label, page="changelist"):
+                response = self.client.get(
+                    reverse(
+                        f"admin:{options.app_label}_{options.model_name}_changelist"
+                    )
+                )
+                self.assertEqual(response.status_code, 200)
+
+            if model_admin.has_add_permission(request):
+                with self.subTest(model=options.label, page="add"):
+                    response = self.client.get(
+                        reverse(
+                            f"admin:{options.app_label}_{options.model_name}_add"
+                        )
+                    )
+                    self.assertEqual(response.status_code, 200)
+
+    def test_admin_can_publish_edit_and_delete_knowledge_article(self):
+        add_url = reverse("admin:rescue_knowledgearticle_add")
+        article_data = {
+            "title": "Hướng dẫn chăm sóc pet mới",
+            "slug": "huong-dan-cham-soc-pet-moi",
+            "category": KnowledgeArticle.Category.CARE,
+            "excerpt": "Các bước chuẩn bị để pet làm quen với gia đình.",
+            "body": "Chuẩn bị nơi nghỉ, nước sạch và lịch sinh hoạt ổn định.",
+            "static_image_path": "",
+            "image_credit": "",
+            "image_source_url": "",
+            "source_name": "PawRescue",
+            "source_url": "",
+            "is_published": "on",
+            "published_at_0": timezone.localdate().isoformat(),
+            "published_at_1": "09:00:00",
+            "_save": "Lưu lại",
+        }
+
+        create_response = self.client.post(add_url, article_data)
+
+        self.assertEqual(create_response.status_code, 302)
+        article = KnowledgeArticle.objects.get(
+            slug="huong-dan-cham-soc-pet-moi"
+        )
+        public_response = self.client.get(article.get_absolute_url())
+        self.assertEqual(public_response.status_code, 200)
+        self.assertContains(public_response, article.title)
+
+        article_data["title"] = "Hướng dẫn chăm sóc pet mới tại nhà"
+        article_data["_save"] = "Lưu lại"
+        update_response = self.client.post(
+            reverse(
+                "admin:rescue_knowledgearticle_change",
+                args=(article.pk,),
+            ),
+            article_data,
+        )
+
+        self.assertEqual(update_response.status_code, 302)
+        article.refresh_from_db()
+        self.assertEqual(
+            article.title,
+            "Hướng dẫn chăm sóc pet mới tại nhà",
+        )
+        self.assertContains(
+            self.client.get(article.get_absolute_url()),
+            article.title,
+        )
+
+        delete_response = self.client.post(
+            reverse(
+                "admin:rescue_knowledgearticle_delete",
+                args=(article.pk,),
+            ),
+            {"post": "yes"},
+        )
+
+        self.assertEqual(delete_response.status_code, 302)
+        self.assertFalse(KnowledgeArticle.objects.filter(pk=article.pk).exists())
+        self.assertEqual(
+            self.client.get(
+                reverse(
+                    "rescue:knowledge-detail",
+                    args=(article.slug,),
+                )
+            ).status_code,
+            404,
+        )
 
 
 class RescueCaseModelTests(TestCase):

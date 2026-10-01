@@ -293,6 +293,7 @@ class Notification(models.Model):
         CASE_UPDATED = "case_updated", "Nhật ký cứu hộ mới"
         ADOPTION_SUBMITTED = "adoption_submitted", "Có đơn nhận nuôi mới"
         ADOPTION_REVIEWED = "adoption_reviewed", "Đơn nhận nuôi đã được xét duyệt"
+        ADOPTION_FOLLOW_UP = "adoption_follow_up", "Nhắc theo dõi sau nhận nuôi"
         ADOPTION_SAFETY = "adoption_safety", "An toàn sau nhận nuôi"
         SUPPORT_MESSAGE = "support_message", "Tin nhắn hỗ trợ"
         DONATION_SUBMITTED = "donation_submitted", "Có đóng góp mới"

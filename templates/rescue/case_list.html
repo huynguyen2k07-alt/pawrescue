@@ -24,12 +24,34 @@
             </ul>
         </div>
         <div class="hero-visual" data-parallax-layer>
-            <span class="hero-depth-orbit hero-depth-orbit-one" aria-hidden="true"></span>
-            <span class="hero-depth-orbit hero-depth-orbit-two" aria-hidden="true"></span>
-            <div class="hero-depth-float">
-                <div class="hero-depth-card" data-motion-tilt data-tilt-strength="3">
-                    <div class="hero-depth-label"><span aria-hidden="true"></span> Hoạt động cộng đồng</div>
-                    <dl class="impact-grid" aria-label="Thống kê cứu hộ">
+            <div class="hero-rescue-float">
+                <div class="hero-rescue-model" data-motion-tilt data-tilt-strength="3">
+                    <div class="hero-rescue-heading">
+                        <span class="hero-rescue-heading-icon" aria-hidden="true">
+                            <svg viewBox="0 0 32 32"><circle cx="9" cy="9" r="4"/><circle cx="23" cy="9" r="4"/><circle cx="5.5" cy="18" r="3.5"/><circle cx="26.5" cy="18" r="3.5"/><path d="M16 13c-5.2 0-9 5.1-7.4 9.5 1.2 3.2 4.3 2.7 7.4 1.6 3.1 1.1 6.2 1.6 7.4-1.6C25 18.1 21.2 13 16 13Z"/></svg>
+                        </span>
+                        <span><small>Mạng lưới tại Đà Nẵng</small><strong>Bản đồ cứu hộ trực tuyến</strong></span>
+                        <span class="hero-rescue-live"><i aria-hidden="true"></i> Đang kết nối</span>
+                    </div>
+
+                    <div class="hero-rescue-map" aria-hidden="true">
+                        <span class="hero-map-zone hero-map-zone-one"></span>
+                        <span class="hero-map-zone hero-map-zone-two"></span>
+                        <svg class="hero-map-route" viewBox="0 0 420 210" preserveAspectRatio="none">
+                            <path d="M55 155 C105 122, 126 150, 173 110 S265 72, 356 52"/>
+                        </svg>
+                        <span class="hero-map-paw hero-map-paw-one">●</span>
+                        <span class="hero-map-paw hero-map-paw-two">●</span>
+                        <span class="hero-map-paw hero-map-paw-three">●</span>
+                        <span class="hero-map-pin hero-map-pin-report"><i>!</i><b>Tin báo mới</b></span>
+                        <span class="hero-map-pin hero-map-pin-team"><i>＋</i><b>Đội hỗ trợ</b></span>
+                        <span class="hero-map-pet-card">
+                            <svg viewBox="0 0 32 32"><circle cx="9" cy="9" r="4"/><circle cx="23" cy="9" r="4"/><circle cx="5.5" cy="18" r="3.5"/><circle cx="26.5" cy="18" r="3.5"/><path d="M16 13c-5.2 0-9 5.1-7.4 9.5 1.2 3.2 4.3 2.7 7.4 1.6 3.1 1.1 6.2 1.6 7.4-1.6C25 18.1 21.2 13 16 13Z"/></svg>
+                            <span><strong>Ca đã được kết nối</strong><small>Đội cứu hộ đang di chuyển</small></span>
+                        </span>
+                    </div>
+
+                    <dl class="hero-rescue-stats" aria-label="Thống kê cứu hộ">
                         <div>
                             <dt>{{ summary.active }}</dt>
                             <dd>Ca đang xử lý</dd>
@@ -43,7 +65,6 @@
                             <dd>Đã cứu thành công</dd>
                         </div>
                     </dl>
-                    <p class="hero-depth-foot">Dữ liệu từ cộng đồng PawRescue <span aria-hidden="true">↗</span></p>
                 </div>
             </div>
         </div>
@@ -61,24 +82,27 @@
         </div>
         <div class="watercolor-action-scene" data-watercolor-scene>
             <img src="{% static 'images/brand/pawrescue-watercolor-actions.png' %}" alt="" loading="eager">
-            <nav class="watercolor-action-links" aria-label="Ba cách đồng hành cùng PawRescue">
-                <a class="watercolor-action" href="{% url 'donations:campaign-list' %}">
-                    <span aria-hidden="true">01</span>
-                    <strong>Ủng hộ · Gây quỹ</strong>
-                    <small>Tiếp sức cho các ca cần điều trị</small>
-                </a>
-                <a class="watercolor-action" href="{% url 'adoptions:animal-list' %}">
-                    <span aria-hidden="true">02</span>
-                    <strong>Tìm chủ · Nhận nuôi</strong>
-                    <small>Mở lòng đón một người bạn mới</small>
-                </a>
-                <a class="watercolor-action" href="#rescue-cases">
-                    <span aria-hidden="true">03</span>
-                    <strong>Các ca cứu hộ</strong>
-                    <small>Theo dõi những trường hợp cần giúp</small>
-                </a>
-            </nav>
         </div>
+        <nav class="watercolor-action-links" aria-label="Ba cách đồng hành cùng PawRescue">
+            <a class="watercolor-action" href="{% url 'donations:campaign-list' %}">
+                <span class="watercolor-action-number" aria-hidden="true">01</span>
+                <span class="watercolor-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/><path d="M12 8v6M9 11h6"/></svg></span>
+                <span class="watercolor-action-copy"><strong>Ủng hộ · Gây quỹ</strong><small>Tiếp sức cho các ca đang điều trị và phục hồi.</small></span>
+                <span class="watercolor-action-arrow" aria-hidden="true">→</span>
+            </a>
+            <a class="watercolor-action" href="{% url 'adoptions:animal-list' %}">
+                <span class="watercolor-action-number" aria-hidden="true">02</span>
+                <span class="watercolor-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 11 9-7 9 7v9h-6v-6H9v6H3Z"/><circle cx="8" cy="10" r="1.4"/><circle cx="16" cy="10" r="1.4"/></svg></span>
+                <span class="watercolor-action-copy"><strong>Tìm chủ · Nhận nuôi</strong><small>Mở lòng đón một người bạn mới về nhà.</small></span>
+                <span class="watercolor-action-arrow" aria-hidden="true">→</span>
+            </a>
+            <a class="watercolor-action" href="#rescue-cases">
+                <span class="watercolor-action-number" aria-hidden="true">03</span>
+                <span class="watercolor-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a7 7 0 1 0 7 7c0-2.2-1-4.2-2.5-5.5"/><path d="M12 7v6M9 10h6M18 3v4M16 5h4"/></svg></span>
+                <span class="watercolor-action-copy"><strong>Các ca cứu hộ</strong><small>Theo dõi những trường hợp đang cần giúp đỡ.</small></span>
+                <span class="watercolor-action-arrow" aria-hidden="true">→</span>
+            </a>
+        </nav>
     </div>
 </section>
 
@@ -92,18 +116,18 @@
     </div>
 
     <nav class="case-status-tabs" aria-label="Lọc ca cứu hộ theo trạng thái">
-        <a class="{% if not selected_status %}is-active{% endif %}" href="{% querystring status=None page=None %}">
+        <a class="{% if not selected_status %}is-active{% endif %}" href="{% querystring status=None page=None %}#rescue-cases" {% if not selected_status %}aria-current="page"{% endif %}>
             <span>Đang cần cứu</span><strong>{{ summary.active }}</strong>
         </a>
         {% for value, label in status_choices %}
-            <a class="{% if selected_status == value %}is-active{% endif %}" href="{% querystring status=value page=None %}">
+            <a class="{% if selected_status == value %}is-active{% endif %}" href="{% querystring status=value page=None %}#rescue-cases" {% if selected_status == value %}aria-current="page"{% endif %}>
                 <span>{{ label }}</span>
                 <strong>{% if value == 'verified' %}{{ summary.verified }}{% elif value == 'rescued' %}{{ summary.rescued }}{% else %}{{ summary.cancelled }}{% endif %}</strong>
             </a>
         {% endfor %}
     </nav>
 
-    <form class="filter-bar filter-bar-public" method="get" role="search">
+    <form class="filter-bar filter-bar-public" method="get" action="{% url 'rescue:case-list' %}#rescue-cases" role="search">
         {% if selected_status %}<input type="hidden" name="status" value="{{ selected_status }}">{% endif %}
         <div class="filter-search">
             <label class="sr-only" for="id_q">Tìm kiếm</label>
@@ -120,7 +144,7 @@
         </div>
         <button class="button button-dark" type="submit">Lọc kết quả</button>
         {% if query or selected_status or selected_animal_type %}
-            <a class="clear-filter" href="{% url 'rescue:case-list' %}">Xóa bộ lọc</a>
+            <a class="clear-filter" href="{% url 'rescue:case-list' %}#rescue-cases">Xóa bộ lọc</a>
         {% endif %}
     </form>
 
@@ -134,11 +158,11 @@
         {% if page_obj.has_other_pages %}
             <nav class="pagination" aria-label="Phân trang">
                 {% if page_obj.has_previous %}
-                    <a href="{% querystring page=page_obj.previous_page_number %}">Trang trước</a>
+                    <a href="{% querystring page=page_obj.previous_page_number %}#rescue-cases">Trang trước</a>
                 {% endif %}
                 <span>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
                 {% if page_obj.has_next %}
-                    <a href="{% querystring page=page_obj.next_page_number %}">Trang sau</a>
+                    <a href="{% querystring page=page_obj.next_page_number %}#rescue-cases">Trang sau</a>
                 {% endif %}
             </nav>
         {% endif %}
@@ -247,7 +271,7 @@
                     <span>{{ contributor.role }}</span>
                     <h3>{{ contributor.name }}</h3>
                     <p>{{ contributor.bio }}</p>
-                    {% if contributor.photo_source_url %}<a href="{{ contributor.photo_source_url }}" target="_blank" rel="noopener noreferrer">Ảnh: {{ contributor.photo_credit }} ↗</a>{% endif %}
+                    {% if contributor.photo_credit %}<span class="contributor-credit">Ảnh: {{ contributor.photo_credit }}</span>{% endif %}
                 </div>
             </article>
         {% empty %}

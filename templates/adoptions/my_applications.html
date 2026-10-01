@@ -26,6 +26,15 @@
                             <div><strong>Hồ sơ bảo vệ sau nhận nuôi</strong><span>{{ application.placement.get_status_display }}{% if application.placement.next_follow_up_on %} · Lịch liên hệ tiếp theo {{ application.placement.next_follow_up_on|date:"d/m/Y" }}{% endif %}</span></div>
                             <a href="{% url 'adoptions:safety-report-create' application.animal_id %}">Báo vấn đề</a>
                         </div>
+                        <div class="check-in-timeline" aria-label="Lịch cập nhật sau nhận nuôi">
+                            {% for reminder in application.placement.check_in_requests.all %}
+                                <div class="check-in-step{% if reminder.submitted_at %} is-complete{% elif reminder.notification_sent_at %} is-due{% endif %}">
+                                    <span>{{ reminder.milestone_month }}</span>
+                                    <div><strong>Tháng {{ reminder.milestone_month }}</strong><small>{% if reminder.submitted_at %}Đã cập nhật {{ reminder.submitted_at|date:"d/m/Y" }}{% elif reminder.notification_sent_at %}Đang chờ phản hồi{% else %}Dự kiến {{ reminder.due_on|date:"d/m/Y" }}{% endif %}</small></div>
+                                    {% if reminder.notification_sent_at and not reminder.submitted_at %}<a href="{% url 'adoptions:check-in' reminder.pk %}">Cập nhật ngay</a>{% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
                     {% endif %}
                     {% if application.status == 'pending' or application.status == 'reviewing' %}
                         <form method="post" action="{% url 'adoptions:application-withdraw' application.pk %}">

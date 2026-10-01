@@ -30,6 +30,11 @@ urlpatterns = [
         views.placement_follow_up,
         name="placement-follow-up",
     ),
+    path(
+        "follow-ups/<int:pk>/check-in/",
+        views.check_in,
+        name="check-in",
+    ),
     path("<int:pk>/", views.animal_detail, name="animal-detail"),
     path("<int:pk>/edit/", views.animal_update, name="animal-update"),
     path("<int:pk>/apply/", views.application_create, name="application-create"),

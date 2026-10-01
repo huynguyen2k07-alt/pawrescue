@@ -43,6 +43,25 @@
         </div>
     </section>
 
+    {% if recent_check_ins %}
+    <section class="adoption-checkin-dashboard">
+        <div class="section-heading compact-heading">
+            <div><span class="eyebrow eyebrow-dark">Phản hồi từ gia đình</span><h2>Cập nhật 1–2–3 tháng gần đây</h2></div>
+            <p>Phản hồi có dấu hiệu cần trợ giúp sẽ tự chuyển hồ sơ sang trạng thái cần kiểm tra.</p>
+        </div>
+        <div class="checkin-response-grid">
+            {% for reminder in recent_check_ins %}
+                <article class="panel checkin-response-card{% if reminder.placement.status == 'needs_attention' %} needs-attention{% endif %}">
+                    <header><div><span>Tháng {{ reminder.milestone_month }}</span><h3>{{ reminder.placement.animal.name }}</h3></div><time>{{ reminder.submitted_at|date:"H:i, d/m/Y" }}</time></header>
+                    <dl><div><dt>Người nhận nuôi</dt><dd>{{ reminder.placement.adopter.full_name|default:reminder.placement.adopter.email }}</dd></div><div><dt>Tình trạng</dt><dd>{{ reminder.get_wellbeing_display }}</dd></div><div><dt>Chăm sóc</dt><dd>{{ reminder.get_care_status_display }}</dd></div></dl>
+                    <p>{{ reminder.care_summary }}</p>
+                    {% if reminder.health_changes %}<div class="review-note"><strong>Thay đổi / cần hỗ trợ</strong><p>{{ reminder.health_changes }}</p></div>{% endif %}
+                </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
     <section class="safety-report-dashboard">
         <div class="section-heading compact-heading"><div><span class="eyebrow eyebrow-dark">Cảnh báo cộng đồng</span><h2>Báo cáo an toàn</h2></div></div>
         <div class="safety-report-list">

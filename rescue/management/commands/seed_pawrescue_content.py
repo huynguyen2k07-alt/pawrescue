@@ -309,6 +309,149 @@ Tạo thói quen an toàn
         "is_featured": False,
         "is_published": True,
     },
+    {
+        "title": "30 ngày đầu sau khi nhận nuôi: giúp pet làm quen nhà mới",
+        "slug": "30-ngay-dau-sau-khi-nhan-nuoi",
+        "category": KnowledgeArticle.Category.CARE,
+        "excerpt": (
+            "Một không gian yên tĩnh, lịch sinh hoạt ổn định và cách làm quen "
+            "từng bước giúp pet bớt căng thẳng trong tháng đầu tiên."
+        ),
+        "body": """Bắt đầu bằng một vùng an toàn
+
+Chuẩn bị một góc yên tĩnh có nước, chỗ ngủ và đồ dùng riêng. Đừng để quá nhiều người ôm, bế hoặc đưa pet đi khắp nhà ngay trong ngày đầu.
+
+Giữ lịch sinh hoạt dễ đoán
+
+Cho ăn, đi vệ sinh và vận động vào những khung giờ tương đối ổn định. Một nhịp sống dễ đoán giúp chó mèo mới nhận nuôi cảm thấy an toàn hơn.
+
+Làm quen từng bước
+
+Nếu nhà có trẻ em hoặc thú cưng khác, hãy cho làm quen ngắn và có giám sát. Luôn để pet có đường lui về vùng an toàn, không ép tương tác.
+
+Theo dõi sức khỏe và hành vi
+
+Ghi lại việc ăn uống, đi vệ sinh, mức vận động và những biểu hiện bất thường. Đưa pet đi kiểm tra thú y sớm và liên hệ tổ chức cứu hộ nếu cần hỗ trợ thích nghi.""",
+        "static_image_path": "images/community/shelter-cat.jpg",
+        "image_credit": "Artem Kniaz / Unsplash",
+        "image_source_url": (
+            "https://unsplash.com/photos/a-cat-is-sitting-inside-of-a-small-"
+            "window-AA0mTuZtGsw"
+        ),
+        "source_name": "Ready.gov — Pets and Animals",
+        "source_url": "https://www.ready.gov/pets",
+        "is_featured": True,
+        "is_published": True,
+    },
+    {
+        "title": "Tiêm phòng dại bảo vệ pet và cả cộng đồng",
+        "slug": "tiem-phong-dai-bao-ve-pet-va-cong-dong",
+        "category": KnowledgeArticle.Category.HEALTH,
+        "excerpt": (
+            "Bệnh dại gần như luôn gây tử vong khi đã phát bệnh, nhưng có thể "
+            "phòng ngừa bằng tiêm chủng và xử lý phơi nhiễm đúng cách."
+        ),
+        "body": """Vì sao không nên bỏ qua vaccine dại
+
+Bệnh dại có thể lây từ động vật sang người qua nước bọt, thường từ vết cắn hoặc cào. Tiêm phòng định kỳ cho chó mèo là một phần quan trọng để bảo vệ gia đình và cộng đồng.
+
+Sau khi bị cắn hoặc cào
+
+Rửa kỹ vết thương bằng xà phòng và nước sạch, sau đó đến cơ sở y tế càng sớm càng tốt. Không chờ theo dõi triệu chứng rồi mới đi khám.
+
+Khi pet tiếp xúc động vật nghi mắc bệnh
+
+Không tự bắt bằng tay trần. Cách ly an toàn, liên hệ bác sĩ thú y và cơ quan chuyên môn để được hướng dẫn theo tình trạng tiêm chủng của pet.
+
+Lưu hồ sơ tiêm chủng
+
+Giữ ảnh hoặc bản sao sổ tiêm, đặt lịch nhắc mũi tiếp theo và cập nhật thông tin liên hệ trên thẻ tên của pet.""",
+        "static_image_path": "images/community/vet-kitten.jpg",
+        "image_credit": "Judy Beth Morris / Unsplash",
+        "image_source_url": (
+            "https://unsplash.com/photos/a-white-kitten-being-examined-by-a-"
+            "veterinator-5Bi6MWlWMbw"
+        ),
+        "source_name": "WOAH — Rabies",
+        "source_url": "https://www.woah.org/en/disease/rabies/",
+        "is_featured": False,
+        "is_published": True,
+    },
+    {
+        "title": "Báo ca cứu hộ thế nào để đội hỗ trợ tìm đúng nơi?",
+        "slug": "bao-ca-cuu-ho-day-du-va-chinh-xac",
+        "category": KnowledgeArticle.Category.RESCUE,
+        "excerpt": (
+            "Một ghim vị trí, ảnh toàn cảnh và mô tả ngắn gọn có thể rút ngắn "
+            "đáng kể thời gian xác minh một ca cứu hộ."
+        ),
+        "body": """Gửi vị trí có thể mở được
+
+Dùng ghim bản đồ hoặc tọa độ, kèm số nhà và mốc dễ thấy. Nếu con vật đang di chuyển, hãy cập nhật hướng đi gần nhất.
+
+Chụp ảnh an toàn
+
+Chụp một ảnh toàn cảnh để nhận ra địa điểm và một ảnh đủ rõ về tình trạng con vật. Không bước xuống lòng đường hoặc tiếp cận quá gần chỉ để có ảnh đẹp.
+
+Mô tả điều quan trọng
+
+Cho biết loài, màu lông, kích thước, dấu hiệu chấn thương, nguy hiểm tại hiện trường và thời điểm bạn nhìn thấy. Để lại số điện thoại có thể liên lạc.
+
+Tiếp tục cập nhật
+
+Nếu con vật rời vị trí, đã có người hỗ trợ hoặc tình trạng thay đổi, hãy nhắn lại ngay để đội cứu hộ không mất thời gian di chuyển sai.""",
+        "static_image_path": "images/community/volunteer-dogs.jpg",
+        "image_credit": "Mia X / Pexels",
+        "image_source_url": (
+            "https://www.pexels.com/photo/volunteer-feeding-rescued-dogs-at-"
+            "animal-shelter-35231857/"
+        ),
+        "source_name": "RSPCA — Injured wild animals",
+        "source_url": "https://www.rspca.org.uk/adviceandwelfare/wildlife/injured",
+        "is_featured": False,
+        "is_published": True,
+    },
+    {
+        "title": "Năm nhu cầu nền tảng để pet có cuộc sống tốt",
+        "slug": "nam-nhu-cau-phuc-loi-dong-vat",
+        "category": KnowledgeArticle.Category.CARE,
+        "excerpt": (
+            "Môi trường phù hợp, dinh dưỡng, hành vi tự nhiên, bạn đồng hành "
+            "và sức khỏe là năm nhóm nhu cầu người nuôi cần theo dõi."
+        ),
+        "body": """Môi trường phù hợp
+
+Pet cần nơi ở an toàn, sạch, có chỗ nghỉ và tránh được nắng nóng, mưa lạnh hoặc những nguồn gây sợ hãi kéo dài.
+
+Dinh dưỡng phù hợp
+
+Cung cấp nước sạch và thức ăn đúng loài, độ tuổi, thể trạng. Không dùng thức ăn của người thay thế khẩu phần cân bằng lâu dài.
+
+Được thể hiện hành vi tự nhiên
+
+Chó cần vận động và khám phá; mèo cần leo trèo, cào và ẩn nấp. Hoạt động nên phù hợp sức khỏe từng cá thể.
+
+Quan hệ xã hội phù hợp
+
+Có con cần bạn đồng loại, có con lại cần không gian riêng. Quan sát dấu hiệu căng thẳng và không ép chúng sống chung khi chưa thích nghi.
+
+Được bảo vệ khỏi đau đớn và bệnh tật
+
+Khám sức khỏe, tiêm phòng, kiểm soát ký sinh trùng và điều trị sớm giúp duy trì phúc lợi lâu dài.""",
+        "static_image_path": "images/community/dog-water.jpg",
+        "image_credit": "R_ INVSCIMENTO / Unsplash",
+        "image_source_url": (
+            "https://unsplash.com/photos/a-dog-is-standing-in-the-cool-water-"
+            "dZOn8GQ0jpU"
+        ),
+        "source_name": "WOAH — Animal welfare",
+        "source_url": (
+            "https://www.woah.org/en/what-we-do/animal-health-and-welfare/"
+            "animal-welfare/"
+        ),
+        "is_featured": False,
+        "is_published": True,
+    },
 )
 
 
