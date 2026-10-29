@@ -12,7 +12,6 @@
         <div class="heading-actions">
             <a class="button button-ghost" href="{% url 'organizations:organization-create' %}">Đăng ký tổ chức</a>
             {% if can_manage_organization_features %}
-                <a class="button button-ghost" href="{% url 'adoptions:dashboard' %}">Nhận nuôi</a>
                 <a class="button button-ghost" href="{% url 'donations:dashboard' %}">Quản lý quỹ</a>
             {% endif %}
             <a class="button button-primary" href="{% url 'rescue:case-list' %}?status=reported">Tìm ca đang chờ</a>

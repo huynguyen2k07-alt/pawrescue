@@ -1,3 +1,5 @@
+"""Giữ lại cấu hình quản trị cũ nhưng không đăng ký khi chức năng nhận nuôi đã tắt."""
+
 from django.contrib import admin
 from django.db.models import Count
 from django.utils.html import format_html
@@ -20,7 +22,6 @@ class AnimalProfileImageInline(admin.TabularInline):
     readonly_fields = ("uploaded_at",)
 
 
-@admin.register(AnimalProfile)
 class AnimalProfileAdmin(admin.ModelAdmin):
     list_display = (
         "name",
@@ -52,7 +53,6 @@ class AnimalProfileAdmin(admin.ModelAdmin):
         return obj._application_count
 
 
-@admin.register(AnimalProfileImage)
 class AnimalProfileImageAdmin(admin.ModelAdmin):
     list_display = ("animal", "caption", "uploaded_at")
     search_fields = ("animal__name", "caption")
@@ -60,7 +60,6 @@ class AnimalProfileImageAdmin(admin.ModelAdmin):
     readonly_fields = ("uploaded_at",)
 
 
-@admin.register(AdoptionApplication)
 class AdoptionApplicationAdmin(admin.ModelAdmin):
     list_display = (
         "applicant_name",
@@ -125,7 +124,6 @@ class AdoptionCheckInRequestInline(admin.TabularInline):
         return False
 
 
-@admin.register(AdoptionPlacement)
 class AdoptionPlacementAdmin(admin.ModelAdmin):
     list_display = (
         "animal",
@@ -144,7 +142,6 @@ class AdoptionPlacementAdmin(admin.ModelAdmin):
     list_per_page = 30
 
 
-@admin.register(AdoptionFollowUp)
 class AdoptionFollowUpAdmin(admin.ModelAdmin):
     list_display = ("placement", "outcome", "contact_method", "contacted_at")
     list_filter = ("outcome", "contact_method")
@@ -152,7 +149,6 @@ class AdoptionFollowUpAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at",)
 
 
-@admin.register(AdoptionCheckInRequest)
 class AdoptionCheckInRequestAdmin(admin.ModelAdmin):
     list_display = (
         "placement",
@@ -178,7 +174,6 @@ class AdoptionCheckInRequestAdmin(admin.ModelAdmin):
     list_select_related = ("placement__animal", "placement__adopter")
 
 
-@admin.register(AdoptionSafetyReport)
 class AdoptionSafetyReportAdmin(admin.ModelAdmin):
     list_display = (
         "animal",
@@ -204,7 +199,6 @@ class AdoptionSafetyReportAdmin(admin.ModelAdmin):
         )
 
 
-@admin.register(AdoptionRestriction)
 class AdoptionRestrictionAdmin(admin.ModelAdmin):
     list_display = ("user", "organization", "is_active", "updated_at")
     list_filter = ("is_active", "organization")

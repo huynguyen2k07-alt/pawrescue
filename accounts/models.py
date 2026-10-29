@@ -31,3 +31,9 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+    def get_full_name(self):
+        return self.full_name.strip() or self.email
+
+    def get_short_name(self):
+        return self.get_full_name()

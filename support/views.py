@@ -14,11 +14,13 @@ from django.views.decorators.http import require_GET, require_POST
 
 from accounts.permissions import (
     is_support_operator,
+    support_operator_queryset,
     support_operator_ids,
     support_operator_required,
 )
 from rescue.models import CommunityFeedback, Notification, RescueCase
 from rescue.notifications import create_notifications
+from rescue.permissions import is_case_assignee, is_rescue_admin
 
 from .forms import SupportMessageForm
 from .models import (
@@ -29,8 +31,13 @@ from .models import (
 )
 
 
-def _operator_ids():
-    return support_operator_ids(get_user_model())
+def _operator_ids(conversation):
+    # Khi đã phân người phụ trách, thông báo hỗ trợ chỉ gửi cho người đó và quản trị viên cao nhất.
+    if conversation.assigned_to_id is None:
+        return support_operator_ids(get_user_model())
+    return support_operator_queryset(get_user_model()).filter(
+        Q(is_superuser=True) | Q(pk=conversation.assigned_to_id)
+    ).values_list("pk", flat=True)
 
 
 def _serialize_message(message):
@@ -77,10 +84,9 @@ def _create_attachments(chat_message, uploaded_files):
         )
 
 
-def _notification_preview(chat_message):
+def _notification_preview(chat_message, attachment_count):
     if chat_message.body:
         return chat_message.body[:100]
-    attachment_count = chat_message.attachments.count()
     return f"Đã gửi {attachment_count} ảnh/video đính kèm."
 
 
@@ -98,14 +104,23 @@ def _operator_conversation_queryset(user):
     return queryset.filter(Q(assigned_to__isnull=True) | Q(assigned_to=user))
 
 
-def _lock_operator_conversation(user, pk):
-    """Lock one plain conversation row, then re-check operator ownership.
+def _case_for_conversation(user, conversation, case_id):
+    if not str(case_id).isdigit():
+        return None
+    rescue_case = RescueCase.objects.filter(pk=int(case_id), reporter_id=conversation.user_id).first()
+    if rescue_case and (is_rescue_admin(user) or is_case_assignee(user, rescue_case)):
+        return rescue_case
+    return None
 
-    The list queryset carries a COUNT annotation for unread badges. PostgreSQL
-    cannot reliably combine that grouped query with SELECT ... FOR UPDATE, so
-    mutation endpoints deliberately lock the base table instead.
+
+def _lock_operator_conversation(user, pk):
+    """Khóa bản ghi hội thoại gốc rồi kiểm tra lại quyền của người phụ trách.
+
+    Danh sách hội thoại có phép đếm tin chưa đọc. Khi cập nhật, khóa bảng gốc
+    để tránh ghép truy vấn có nhóm dữ liệu với SELECT ... FOR UPDATE trên PostgreSQL.
     """
 
+    # Khóa hội thoại rồi kiểm tra lại người phụ trách để tránh thao tác trên phân công đã đổi.
     conversation = (
         SupportConversation.objects.select_for_update()
         .filter(pk=pk)
@@ -208,15 +223,18 @@ def chat_state(request):
             }
         )
 
-    if request.GET.get("mark_read") == "1":
+    mark_read = request.GET.get("mark_read") == "1"
+    if mark_read:
         conversation.messages.filter(
             sender_role=SupportMessage.SenderRole.ADMIN,
             is_read_by_user=False,
         ).update(is_read_by_user=True)
-    unread_count = conversation.messages.filter(
-        sender_role=SupportMessage.SenderRole.ADMIN,
-        is_read_by_user=False,
-    ).count()
+        unread_count = 0
+    else:
+        unread_count = conversation.messages.filter(
+            sender_role=SupportMessage.SenderRole.ADMIN,
+            is_read_by_user=False,
+        ).count()
     recent_messages = list(
         conversation.messages.select_related("sender")
         .prefetch_related("attachments")
@@ -267,17 +285,18 @@ def chat_send(request):
             is_read_by_user=True,
         )
         _create_attachments(chat_message, form.cleaned_data["attachments"])
+        attachment_count = len(form.cleaned_data["attachments"])
         conversation.status = SupportConversation.Status.WAITING_ADMIN
         conversation.last_message_at = chat_message.created_at
         conversation.save(update_fields=("status", "last_message_at", "updated_at"))
 
         create_notifications(
-            recipient_ids=_operator_ids(),
+            recipient_ids=_operator_ids(conversation),
             kind=Notification.Kind.SUPPORT_MESSAGE,
             title="Có tin nhắn hỗ trợ mới",
             message=(
                 f"{request.user.full_name or request.user.email}: "
-                f"{_notification_preview(chat_message)}"
+                f"{_notification_preview(chat_message, attachment_count)}"
             ),
             actor=request.user,
             target_url=(
@@ -317,13 +336,8 @@ def inbox(request):
         chat_messages = selected.messages.select_related("sender").prefetch_related(
             "attachments"
         )
-        case_id = request.GET.get("case", "")
-        if case_id.isdigit():
-            context_case = RescueCase.objects.filter(
-                pk=int(case_id),
-                reporter_id=selected.user_id,
-            ).first()
-        if context_case:
+        context_case = _case_for_conversation(request.user, selected, request.GET.get("case", ""))
+        if context_case and request.GET.get("sent") != "1":
             display_name = selected.user.full_name or "bạn"
             draft_message = (
                 f"Chào {display_name}, PawRescue liên hệ với bạn về ca "
@@ -371,6 +385,8 @@ def open_case_chat(request, pk):
         RescueCase.objects.select_related("reporter"),
         pk=pk,
     )
+    if not (is_rescue_admin(request.user) or is_case_assignee(request.user, rescue_case)):
+        raise Http404
     return_url = (
         reverse("admin:rescue_rescuecase_change", args=(rescue_case.pk,))
         if request.user.is_superuser
@@ -453,7 +469,6 @@ def inbox_state(request):
             "messages": [_serialize_message(item) for item in recent_messages],
         }
 
-    # Re-query after marking the selected thread as read so its badge is current.
     conversations = _conversation_queryset(request.user)
     return JsonResponse(
         {
@@ -468,26 +483,26 @@ def inbox_state(request):
 @require_POST
 @support_operator_required
 def admin_reply(request, pk):
-    # Fail closed before parsing potentially large uploads, then repeat this
-    # authorization check under the row lock immediately before mutation.
     snapshot = get_object_or_404(
         _operator_conversation_queryset(request.user),
         pk=pk,
     )
+    return_url = reverse("support:inbox") + f"?conversation={pk}"
+    context_case = _case_for_conversation(request.user, snapshot, request.POST.get("case", ""))
+    if context_case:
+        return_url += f"&case={context_case.pk}"
     form = SupportMessageForm(request.POST, request.FILES)
     if not form.is_valid():
         error = next(iter(form.errors.values()))[0]
         django_messages.error(request, str(error))
-        return redirect(reverse("support:inbox") + f"?conversation={pk}")
+        return redirect(return_url)
 
     with transaction.atomic():
-        # Keep the same user -> conversation lock order as chat_send so a
-        # simultaneous user message cannot deadlock with an operator reply.
         get_user_model().objects.select_for_update().get(pk=snapshot.user_id)
         conversation = _lock_operator_conversation(request.user, pk)
         if conversation.status == SupportConversation.Status.CLOSED:
             django_messages.error(request, "Cuộc trò chuyện này đã được đóng.")
-            return redirect(reverse("support:inbox") + f"?conversation={pk}")
+            return redirect(return_url)
         chat_message = SupportMessage.objects.create(
             conversation=conversation,
             sender=request.user,
@@ -496,6 +511,7 @@ def admin_reply(request, pk):
             is_read_by_admin=True,
         )
         _create_attachments(chat_message, form.cleaned_data["attachments"])
+        attachment_count = len(form.cleaned_data["attachments"])
         conversation.assigned_to = request.user
         conversation.status = SupportConversation.Status.WAITING_USER
         conversation.last_message_at = chat_message.created_at
@@ -511,13 +527,13 @@ def admin_reply(request, pk):
             recipient_ids=(conversation.user_id,),
             kind=Notification.Kind.SUPPORT_MESSAGE,
             title="Đội hỗ trợ đã trả lời",
-            message=_notification_preview(chat_message),
+            message=_notification_preview(chat_message, attachment_count),
             actor=request.user,
             target_url=reverse("rescue:case-list"),
         )
 
     django_messages.success(request, "Đã gửi câu trả lời tới người dùng.")
-    return redirect(reverse("support:inbox") + f"?conversation={pk}")
+    return redirect(return_url + ("&sent=1" if context_case else ""))
 
 
 @require_POST
@@ -552,9 +568,6 @@ def close_conversation(request, pk):
 @require_POST
 @support_operator_required
 def reopen_conversation(request, pk):
-    # Read only enough to establish the lock order used by chat_send:
-    # user first, then conversation. This prevents a reopened historical
-    # thread racing with a new thread created by the same user.
     snapshot = get_object_or_404(
         _operator_conversation_queryset(request.user),
         pk=pk,

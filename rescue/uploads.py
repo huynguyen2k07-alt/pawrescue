@@ -139,7 +139,7 @@ def _sanitize_webp(data):
             raise ValidationError("Tệp WebP bị cắt ngắn.")
         payload = bytearray(data[position + 8 : position + 8 + chunk_length])
         if chunk_type == b"VP8X" and chunk_length >= 10:
-            payload[0] &= ~0x0C  # Clear EXIF and XMP feature flags.
+            payload[0] &= ~0x0C
             width = int.from_bytes(payload[4:7], "little") + 1
             height = int.from_bytes(payload[7:10], "little") + 1
             dimensions = (width, height)
@@ -172,7 +172,8 @@ def _sanitize_webp(data):
 
 
 def sanitize_image_upload(uploaded_file):
-    """Validate image bytes and remove common EXIF/text metadata containers."""
+    """Kiểm tra nội dung ảnh và loại bỏ thông tin phụ EXIF hoặc văn bản được nhúng trong ảnh."""
+    # Kiểm tra nội dung ảnh thật và loại thông tin phụ trong ảnh để giảm rò rỉ dữ liệu riêng tư.
     try:
         uploaded_file.seek(0)
         data = uploaded_file.read()
@@ -204,7 +205,7 @@ def sanitize_image_upload(uploaded_file):
 
 
 def sanitize_model_image(instance, field_name):
-    """Normalize a newly assigned model image before its storage write."""
+    """Chuẩn hóa ảnh mới được gắn vào đối tượng trước khi ghi tệp vào kho lưu trữ."""
     field_file = getattr(instance, field_name, None)
     if not field_file or getattr(field_file, "_committed", True):
         return

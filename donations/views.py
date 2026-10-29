@@ -3,6 +3,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -15,8 +16,12 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_GET, require_POST
 
-from organizations.models import OrganizationMembership, RescueOrganization
-from rescue.models import Notification, RescueCase
+from organizations.permissions import (
+    MANAGER_ROLES,
+    can_manage_organization,
+    fundraising_organizations as _managed_organizations,
+)
+from rescue.models import Notification
 from rescue.notifications import create_notifications
 
 from .forms import (
@@ -26,52 +31,31 @@ from .forms import (
     FundraisingCampaignForm,
 )
 from .models import CampaignExpense, Donation, FundraisingCampaign
+from .services import save_reviewed_donation
 
 
-MANAGER_ROLES = (
-    OrganizationMembership.Role.OWNER,
-    OrganizationMembership.Role.MANAGER,
-)
 MONEY_FIELD = DecimalField(max_digits=14, decimal_places=0)
 
 
-def _managed_organizations(user):
-    if not user.is_authenticated:
-        return RescueOrganization.objects.none()
-    if user.is_superuser:
-        return RescueOrganization.objects.filter(is_active=True)
-    return RescueOrganization.objects.filter(
-        memberships__user=user,
-        memberships__is_active=True,
-        memberships__role__in=MANAGER_ROLES,
-        is_verified=True,
-        is_active=True,
-    ).distinct()
-
-
 def _can_manage_campaign(user, campaign):
-    if not user.is_authenticated:
-        return False
-    if user.is_superuser:
-        return True
-    if not campaign.organization.is_active or not campaign.organization.is_verified:
-        return False
-    return OrganizationMembership.objects.filter(
-        organization=campaign.organization,
-        user=user,
-        is_active=True,
-        role__in=MANAGER_ROLES,
-    ).exists()
+    return can_manage_organization(user, campaign.organization)
 
 
 def _manager_ids(organization):
-    if not organization.is_active or not organization.is_verified:
-        return ()
-    return organization.memberships.filter(
-        is_active=True,
-        role__in=MANAGER_ROLES,
-        user__is_active=True,
-    ).values_list("user_id", flat=True)
+    recipient_ids = set(
+        get_user_model().objects.filter(
+            is_active=True, is_superuser=True
+        ).values_list("pk", flat=True)
+    )
+    if organization.is_active and organization.is_verified:
+        recipient_ids.update(
+            organization.memberships.filter(
+                is_active=True,
+                role__in=MANAGER_ROLES,
+                user__is_active=True,
+            ).values_list("user_id", flat=True)
+        )
+    return recipient_ids
 
 
 def _private_file_response(field_file):
@@ -339,6 +323,13 @@ def donation_proof(request, pk):
         request.user.is_superuser
         or donation.donor_id == request.user.pk
         or _can_manage_campaign(request.user, donation.campaign)
+        or (
+            request.user.is_staff
+            and (
+                request.user.has_perm("donations.view_donation")
+                or request.user.has_perm("donations.change_donation")
+            )
+        )
     )
     if not can_access or not donation.proof:
         raise Http404
@@ -357,7 +348,13 @@ def expense_receipt(request, pk):
         and expense.campaign.organization.is_active
         and expense.campaign.organization.is_verified
     )
-    if not public_receipt and not _can_manage_campaign(request.user, expense.campaign):
+    can_administer = request.user.is_authenticated and request.user.is_staff and (
+        request.user.has_perm("donations.view_campaignexpense")
+        or request.user.has_perm("donations.change_campaignexpense")
+    )
+    if not public_receipt and not (
+        can_administer or _can_manage_campaign(request.user, expense.campaign)
+    ):
         raise Http404
     if not expense.receipt:
         raise Http404
@@ -409,7 +406,7 @@ def donation_review(request, pk):
         return redirect("donations:dashboard")
     with transaction.atomic():
         donation = get_object_or_404(
-            Donation.objects.select_for_update().select_related(
+            Donation.objects.select_related(
                 "campaign",
                 "campaign__organization",
                 "donor",
@@ -421,38 +418,10 @@ def donation_review(request, pk):
         if donation.status != Donation.Status.PENDING:
             messages.info(request, "Đóng góp này đã được xử lý trước đó.")
             return redirect("donations:dashboard")
-        new_status = form.cleaned_data["status"]
-        donation.status = new_status
-        donation.confirmed_by = request.user
-        donation.confirmed_at = (
-            timezone.now() if new_status == Donation.Status.CONFIRMED else None
-        )
-        donation.save(
-            update_fields=("status", "confirmed_by", "confirmed_at")
-        )
-        if new_status == Donation.Status.CONFIRMED:
-            confirmed_total = donation.campaign.donations.filter(
-                status=Donation.Status.CONFIRMED
-            ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
-            if (
-                confirmed_total >= donation.campaign.target_amount
-                and donation.campaign.status == FundraisingCampaign.Status.ACTIVE
-            ):
-                donation.campaign.status = FundraisingCampaign.Status.COMPLETED
-                donation.campaign.save(update_fields=("status", "updated_at"))
-        if donation.donor_id:
-            create_notifications(
-                recipient_ids=(donation.donor_id,),
-                kind=Notification.Kind.DONATION_REVIEWED,
-                title="Đóng góp của bạn đã được cập nhật",
-                message=(
-                    f'Khoản đóng góp {donation.amount:,.0f} VNĐ cho '
-                    f'"{donation.campaign.title}" hiện ở trạng thái '
-                    f'“{donation.get_status_display()}”.'
-                ),
-                actor=request.user,
-                target_url=reverse("donations:my-donations"),
-            )
+        donation.status = form.cleaned_data["status"]
+        if save_reviewed_donation(donation, reviewer=request.user, pending_only=True) is None:
+            messages.info(request, "Đóng góp này đã được xử lý trước đó.")
+            return redirect("donations:dashboard")
     messages.success(request, "Trạng thái đóng góp đã được cập nhật.")
     return redirect("donations:dashboard")
 

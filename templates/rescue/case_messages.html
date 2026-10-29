@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Trao đổi riêng ca #{{ case.pk }} · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container narrow-container">
+    <a class="back-link" href="{% url 'rescue:case-detail' case.pk %}">← Về thông tin ca cứu hộ</a>
+    <div class="page-intro">
+        <span class="eyebrow eyebrow-dark">Trao đổi riêng · Tin báo #{{ case.pk }}</span>
+        <h1>{{ case.title }}</h1>
+        <p>Trao đổi với admin hoặc người được giao xử lý ca. Mỗi người chỉ thấy tin mình gửi hoặc nhận.</p>
+    </div>
+    <div class="panel detail-panel private-case-messages" aria-label="Tin nhắn điều phối">{# Trao đổi riêng theo ca: mỗi người chỉ xem được tin mình gửi hoặc nhận. #}
+        {% for item in private_messages %}
+            <article class="private-case-message{% if item.sender_id == user.pk %} is-own{% endif %}">
+                <header><strong>{{ item.sender.full_name|default:item.sender.email }}</strong><span>→ {{ item.recipient.full_name|default:item.recipient.email }}</span></header>
+                <p>{{ item.body|linebreaksbr }}</p>
+                <small>{{ item.created_at|date:"H:i, d/m/Y" }}{% if item.sender_id == user.pk and item.read_at %} · Đã đọc{% endif %}</small>
+            </article>
+        {% empty %}
+            <p class="muted">Chưa có tin nhắn riêng. Gửi chỉ dẫn hoặc trao đổi với admin bên dưới.</p>
+        {% endfor %}
+    </div>
+    <form class="panel form-panel" method="post">
+        {% csrf_token %}
+        <h2>Gửi tin nhắn riêng</h2>
+        {% if has_recipients %}
+            {{ form.non_field_errors }}
+            {% for field in form %}<div class="field">{{ field.label_tag }}{{ field }}{% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}</div>{% endfor %}
+            <button class="button button-primary" type="submit">Gửi tin nhắn</button>
+        {% else %}
+            <p>Hãy phân công người phụ trách trong thông tin ca trước khi gửi tin nhắn.</p>
+        {% endif %}
+    </form>
+</section>
+{% endblock %}

@@ -6,7 +6,7 @@ from django.utils.deconstruct import deconstructible
 
 @deconstructible
 class PrivateDonationStorage(FileSystemStorage):
-    """Filesystem storage that deliberately has no public media URL."""
+    """Kho lưu tệp đóng góp riêng tư, không cung cấp đường dẫn công khai."""
 
     def __init__(self):
         super().__init__(location=None, base_url=None)

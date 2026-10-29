@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from rescue.models import RescueCase
+from rescue.permissions import visible_cases_for
 
 from .forms import (
     AddOrganizationMemberForm,
@@ -76,7 +77,10 @@ def dashboard(request):
     organizations = organizations.annotate(
         active_case_count=Count(
             "rescue_cases",
-            filter=Q(rescue_cases__status__in=ACTIVE_CASE_STATUSES),
+            filter=(
+                Q(rescue_cases__status__in=ACTIVE_CASE_STATUSES)
+                & Q(rescue_cases__in=visible_cases_for(request.user, RescueCase.objects.all()))
+            ),
             distinct=True,
         ),
         member_count=Count(
@@ -98,10 +102,11 @@ def dashboard(request):
         )
 
     organization_ids = [organization.id for organization in organization_list]
-    cases = (
+    cases = visible_cases_for(
+        request.user,
         RescueCase.objects.filter(organization_id__in=organization_ids)
         .select_related("organization", "reporter")
-        .prefetch_related("images", "assignments__assignee")
+        .prefetch_related("images", "assignments__assignee"),
     )
 
     context = {
@@ -163,17 +168,21 @@ def organization_detail(request, pk):
         return forbidden
 
     memberships = organization.memberships.filter(is_active=True).select_related("user")
-    cases = (
+    cases = visible_cases_for(
+        request.user,
         organization.rescue_cases.select_related("reporter")
         .prefetch_related("images", "assignments__assignee")
-        .all()
+        .all(),
     )
     context = {
         "organization": organization,
         "membership": membership,
         "memberships": memberships,
         "cases": cases,
-        "can_manage_members": _is_owner(request.user, organization, membership),
+        "can_manage_members": (
+            not organization.is_system
+            and _is_owner(request.user, organization, membership)
+        ),
         "add_member_form": AddOrganizationMemberForm(),
         "role_choices": OrganizationMembership.Role.choices,
     }
@@ -186,6 +195,12 @@ def organization_update(request, pk):
     _membership, forbidden = _owner_or_forbidden(request.user, organization)
     if forbidden:
         return forbidden
+
+    if organization.is_system:
+        messages.info(
+            request, "Thông tin tổ chức hệ thống được quản lý trong trang quản trị."
+        )
+        return redirect("admin:organizations_rescueorganization_change", organization.pk)
 
     if request.method == "POST":
         form = RescueOrganizationForm(request.POST, instance=organization)
@@ -210,6 +225,8 @@ def member_add(request, pk):
     _membership, forbidden = _owner_or_forbidden(request.user, organization)
     if forbidden:
         return forbidden
+    if organization.is_system:
+        return HttpResponseForbidden("Tổ chức hệ thống không có thành viên sở hữu.")
 
     form = AddOrganizationMemberForm(request.POST)
     if form.is_valid():

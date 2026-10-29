@@ -12,6 +12,7 @@
         '<a href="https://www.maptiler.com/copyright/">&copy; MapTiler</a> ' +
         osmAttribution;
 
+    // Chỉ nhận tọa độ trong phạm vi Đà Nẵng mà hệ thống hỗ trợ cứu hộ.
     function isWithinDaNang(latitude, longitude) {
         return (
             latitude >= daNangBoundsCoordinates[0][0] &&
@@ -26,7 +27,7 @@
         const providers = [];
         if (apiKey) {
             providers.push({
-                name: "Bản đồ PawRescue",
+                name: "MapTiler (tùy chọn)",
                 url: `https://api.maptiler.com/maps/streets-v4/{z}/{x}/{y}.png?key=${encodeURIComponent(apiKey)}`,
                 options: {
                     attribution: mapTilerAttribution,
@@ -37,8 +38,9 @@
                 },
             });
         }
-        providers.push({
-            name: apiKey ? "OpenStreetMap dự phòng" : "OpenStreetMap",
+        // Nền OpenStreetMap không cần khóa giúp bản đồ vẫn dùng được khi khóa MapTiler hết hạn.
+        providers.unshift({
+            name: "OpenStreetMap",
             url: "https://tile.openstreetmap.de/{z}/{x}/{y}.png",
             options: {
                 attribution: osmAttribution,
@@ -111,10 +113,15 @@
                     activeLayerIndex += 1;
                     activeLayer = layers[activeLayerIndex];
                     activeLayer.addTo(map);
-                    showLoadState("Đang chuyển sang OpenStreetMap dự phòng...", "is-loading");
+                    showLoadState(`Đang chuyển sang ${tileProviders[activeLayerIndex].name}...`, "is-loading");
                     return;
                 }
-                showLoadState("Không thể tải nền bản đồ. Hãy kiểm tra kết nối mạng rồi tải lại trang.", "is-error");
+                showLoadState(
+                    element.hasAttribute("data-map-picker")
+                        ? "Không tải được nền bản đồ. Bạn vẫn có thể nhập tọa độ bên dưới."
+                        : "Không thể tải nền bản đồ. Hãy kiểm tra kết nối mạng rồi tải lại trang.",
+                    "is-error"
+                );
             });
         });
 
@@ -142,16 +149,23 @@
         return Number.isFinite(value);
     }
 
+    function readCoordinate(value) {
+        return value.trim() === "" ? NaN : Number(value);
+    }
+
     function initPicker() {
         const element = document.querySelector("[data-map-picker]");
         if (!element) return;
 
         const latitudeInput = document.getElementById("id_latitude");
         const longitudeInput = document.getElementById("id_longitude");
+        if (!latitudeInput || !longitudeInput) return;
+        const addressInput = document.getElementById("id_address");
         const locationButton = document.getElementById("use-current-location");
         const status = document.getElementById("location-status");
-        const initialLatitude = Number.parseFloat(element.dataset.latitude);
-        const initialLongitude = Number.parseFloat(element.dataset.longitude);
+        const summary = document.getElementById("location-summary");
+        const initialLatitude = readCoordinate(latitudeInput.value || element.dataset.latitude || "");
+        const initialLongitude = readCoordinate(longitudeInput.value || element.dataset.longitude || "");
         const hasInitialLocation =
             validCoordinate(initialLatitude) &&
             validCoordinate(initialLongitude) &&
@@ -159,24 +173,54 @@
         const initialCenter = hasInitialLocation
             ? [initialLatitude, initialLongitude]
             : daNangCenter;
-        const map = createMap(element, initialCenter, hasInitialLocation ? 15 : 11);
-        const instruction = document.createElement("div");
-        instruction.className = "map-picker-instruction";
-        instruction.textContent = "Bấm lên bản đồ để đặt ghim · Kéo ghim để chỉnh";
-        element.appendChild(instruction);
+        const mapAvailable = typeof L !== "undefined";
+        const map = mapAvailable ? createMap(element, initialCenter, hasInitialLocation ? 15 : 11) : null;
+        let instruction = null;
+        if (map) {
+            instruction = document.createElement("div");
+            instruction.className = "map-picker-instruction";
+            instruction.textContent = "Bấm lên bản đồ để đặt ghim · Kéo ghim để chỉnh";
+            element.appendChild(instruction);
+        } else {
+            element.textContent = "Không tải được bản đồ. Hãy nhập địa chỉ cụ thể, vĩ độ và kinh độ bên dưới; bạn vẫn gửi được báo cáo đến admin.";
+            element.setAttribute("role", "status");
+        }
         let marker = null;
         let selectedLocation = null;
 
-        function setLocation(latitude, longitude, centerMap) {
-            if (!isWithinDaNang(latitude, longitude)) {
+        function updateSummary() {
+            if (!summary) return;
+            const address = addressInput ? addressInput.value.trim() : "";
+            const coordinateText = selectedLocation
+                ? `${selectedLocation[0].toFixed(6)}, ${selectedLocation[1].toFixed(6)}`
+                : "chưa chọn";
+            summary.textContent = `Địa chỉ gửi admin: ${address || "chưa nhập"}. Tọa độ: ${coordinateText}. Hãy kiểm tra hai thông tin cùng chỉ đúng một địa điểm.`;
+        }
+
+        function clearLocation() {
+            selectedLocation = null;
+            if (marker) {
+                map.removeLayer(marker);
+                marker = null;
+            }
+            element.classList.remove("has-selection");
+            if (instruction) instruction.textContent = "Bấm lên bản đồ để đặt ghim · Kéo ghim để chỉnh";
+            updateSummary();
+        }
+
+        // Giữ ghim và ô tọa độ đồng bộ khi bấm bản đồ, kéo ghim hoặc lấy vị trí thiết bị.
+        function setLocation(latitude, longitude, centerMap, writeInputs = true) {
+            if (!validCoordinate(latitude) || !validCoordinate(longitude) || !isWithinDaNang(latitude, longitude)) {
                 status.textContent = "Vị trí này nằm ngoài phạm vi Đà Nẵng. Hãy chọn lại trong khu vực được hỗ trợ.";
                 if (marker && selectedLocation) marker.setLatLng(selectedLocation);
                 return false;
             }
             selectedLocation = [latitude, longitude];
-            latitudeInput.value = latitude.toFixed(6);
-            longitudeInput.value = longitude.toFixed(6);
-            if (!marker) {
+            if (writeInputs) {
+                latitudeInput.value = latitude.toFixed(6);
+                longitudeInput.value = longitude.toFixed(6);
+            }
+            if (map && !marker) {
                 marker = L.marker([latitude, longitude], {
                     draggable: true,
                     icon: createPinIcon(),
@@ -186,22 +230,44 @@
                     const position = marker.getLatLng();
                     setLocation(position.lat, position.lng, false);
                 });
-            } else {
+            } else if (marker) {
                 marker.setLatLng([latitude, longitude]);
             }
-            if (centerMap) map.setView([latitude, longitude], 16);
+            if (map && centerMap) map.setView([latitude, longitude], 16);
             element.classList.add("has-selection");
-            instruction.textContent = "Đã đặt ghim · Có thể kéo để chỉnh chính xác";
-            status.textContent = `Đã chọn vị trí: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}.`;
+            if (instruction) instruction.textContent = "Đã đặt ghim · Có thể kéo để chỉnh chính xác";
+            status.textContent = `Đã chọn tọa độ: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}. ${map ? "Kiểm tra ghim và địa chỉ trước khi gửi." : "Có thể gửi báo cáo dù bản đồ chưa tải được."}`;
+            updateSummary();
             return true;
         }
 
-        if (hasInitialLocation) setLocation(initialLatitude, initialLongitude, false);
+        function syncFromInputs(centerMap) {
+            const latitude = readCoordinate(latitudeInput.value);
+            const longitude = readCoordinate(longitudeInput.value);
+            if (!validCoordinate(latitude) || !validCoordinate(longitude)) {
+                clearLocation();
+                status.textContent = "Hãy chọn ghim hoặc nhập đầy đủ vĩ độ và kinh độ ở hai ô bên dưới.";
+                return;
+            }
+            if (!setLocation(latitude, longitude, centerMap, false)) clearLocation();
+        }
 
-        map.on("click", function (event) {
-            setLocation(event.latlng.lat, event.latlng.lng, false);
+        if (hasInitialLocation) setLocation(initialLatitude, initialLongitude, false, false);
+        else syncFromInputs(false);
+
+        [latitudeInput, longitudeInput].forEach(function (input) {
+            input.addEventListener("input", function () { syncFromInputs(true); });
+            input.addEventListener("change", function () { syncFromInputs(true); });
         });
+        if (addressInput) addressInput.addEventListener("input", updateSummary);
 
+        if (map) {
+            map.on("click", function (event) {
+                setLocation(event.latlng.lat, event.latlng.lng, false);
+            });
+        }
+
+        if (!locationButton) return;
         locationButton.addEventListener("click", function () {
             if (!navigator.geolocation) {
                 status.textContent = "Trình duyệt này không hỗ trợ lấy vị trí hiện tại.";
@@ -215,7 +281,7 @@
                     locationButton.disabled = false;
                 },
                 function () {
-                    status.textContent = "Không thể lấy vị trí. Bạn có thể bấm trực tiếp lên bản đồ.";
+                    status.textContent = "Không thể lấy vị trí. Hãy chọn ghim hoặc nhập vĩ độ và kinh độ bên dưới.";
                     locationButton.disabled = false;
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
@@ -231,11 +297,14 @@
         const longitude = Number.parseFloat(element.dataset.longitude);
         if (!validCoordinate(latitude) || !validCoordinate(longitude)) return;
 
+        // Máy chủ quyết định quyền xem vị trí; tọa độ đã làm mờ được thể hiện bằng vùng gần đúng.
         const isApproximate = element.dataset.approximate === "true";
         const map = createMap(element, [latitude, longitude], isApproximate ? 13 : 16);
+        const popupTitle = document.createElement("strong");
+        popupTitle.textContent = element.dataset.title;
         L.marker([latitude, longitude], { icon: createPinIcon() })
             .addTo(map)
-            .bindPopup(element.dataset.title);
+            .bindPopup(popupTitle);
         if (isApproximate) {
             L.circle([latitude, longitude], {
                 radius: 1400,
@@ -260,6 +329,7 @@
         return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
+    // Hiển thị tiêu đề và địa chỉ dưới dạng văn bản để nội dung người dùng nhập không trở thành mã HTML.
     function buildPopup(rescueCase) {
         const wrapper = document.createElement("div");
         wrapper.className = "map-popup";
@@ -426,6 +496,13 @@
     }
 
     initPicker();
-    initDetailMap();
-    initCasesMap();
+    if (typeof L !== "undefined") {
+        initDetailMap();
+        initCasesMap();
+    } else {
+        document.querySelectorAll("[data-case-map], [data-cases-map]").forEach(function (element) {
+            element.textContent = "Không tải được bản đồ. Hãy xem thông tin địa chỉ của ca cứu hộ.";
+            element.setAttribute("role", "status");
+        });
+    }
 })();

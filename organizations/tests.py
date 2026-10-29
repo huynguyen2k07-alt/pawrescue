@@ -1,10 +1,16 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 
 from .models import OrganizationMembership, RescueOrganization
+from .permissions import (
+    can_manage_organization,
+    fundraising_organizations,
+    managed_organizations,
+)
 
 
 class OrganizationModelTests(TestCase):
@@ -27,6 +33,59 @@ class OrganizationModelTests(TestCase):
 
     def test_organization_string_representation(self):
         self.assertEqual(str(self.organization), "Happy Paws Rescue")
+
+    def test_management_filters_preserve_roles_and_operational_requirements(self):
+        expected_ids = set()
+        for index, (role, active_member, active_org, verified) in enumerate(
+            (
+                (OrganizationMembership.Role.OWNER, True, True, True),
+                (OrganizationMembership.Role.MANAGER, True, True, True),
+                (OrganizationMembership.Role.VOLUNTEER, True, True, True),
+                (OrganizationMembership.Role.OWNER, False, True, True),
+                (OrganizationMembership.Role.OWNER, True, False, True),
+                (OrganizationMembership.Role.OWNER, True, True, False),
+            )
+        ):
+            organization = RescueOrganization.objects.create(
+                name=f"Management filter {index}",
+                is_active=active_org,
+                is_verified=verified,
+            )
+            OrganizationMembership.objects.create(
+                organization=organization,
+                user=self.user,
+                role=role,
+                is_active=active_member,
+            )
+            self.assertEqual(
+                can_manage_organization(self.user, organization),
+                index < 2,
+            )
+            if index < 2:
+                expected_ids.add(organization.pk)
+
+        for queryset in (managed_organizations, fundraising_organizations):
+            self.assertSetEqual(
+                set(queryset(self.user).values_list("pk", flat=True)),
+                expected_ids,
+            )
+
+    def test_superuser_fundraising_includes_unverified_organizations(self):
+        admin = get_user_model().objects.create_superuser(
+            email="organization-admin@example.com", password="test-password"
+        )
+        self.assertIn(self.organization, fundraising_organizations(admin))
+        self.assertNotIn(self.organization, managed_organizations(admin))
+        self.assertTrue(can_manage_organization(admin, self.organization))
+        system = RescueOrganization.objects.get(is_system=True)
+        self.assertIn(system, managed_organizations(admin))
+
+    def test_anonymous_management_filters_do_not_query_database(self):
+        with self.assertNumQueries(0):
+            for user in (None, AnonymousUser()):
+                self.assertFalse(can_manage_organization(user, self.organization))
+                self.assertEqual(list(managed_organizations(user)), [])
+                self.assertEqual(list(fundraising_organizations(user)), [])
 
     def test_user_can_join_organization_with_a_role(self):
         membership = OrganizationMembership.objects.create(

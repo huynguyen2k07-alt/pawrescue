@@ -1,18 +1,20 @@
 from django import template
-from django.utils import timezone
+from django.contrib import admin
+from django.db.models import Count, Q
 
 from accounts.permissions import is_support_operator
-from adoptions.models import (
-    AdoptionApplication,
-    AdoptionCheckInRequest,
-    AdoptionSafetyReport,
-)
-from donations.models import Donation
-from rescue.models import Notification, RescueCase
+from rescue.models import RescueCase
+from rescue.permissions import is_rescue_admin
 from support.models import SupportConversation
 
 
 register = template.Library()
+
+ADMIN_LABELS = {
+    "accounts.user": "Tài khoản và nhân sự",
+    "organizations.rescueorganization": "Đơn vị tiếp nhận",
+    "rescue.rescuecase": "Yêu cầu cứu hộ",
+}
 
 
 @register.simple_tag(takes_context=True)
@@ -21,77 +23,57 @@ def pawrescue_admin_dashboard(context, app_list=None):
     if not user or not user.is_authenticated or not user.is_staff:
         return {}
 
+    request = context.get("request")
     for app in app_list or ():
         app_record_count = 0
         for model_info in app.get("models", ()):
-            record_count = model_info["model"]._default_manager.count()
+            model = model_info["model"]
+            model_key = model._meta.label_lower
+            model_info["name"] = ADMIN_LABELS.get(model_key, model_info["name"])
+            model_admin = admin.site._registry.get(model)
+            queryset = (
+                model_admin.get_queryset(request)
+                if model_admin is not None and request is not None
+                else model._default_manager.none()
+            )
+            record_count = queryset.count()
             model_info["record_count"] = record_count
             app_record_count += record_count
         app["record_count"] = app_record_count
 
-    active_cases = RescueCase.objects.none()
-    if user.has_perm("rescue.view_rescuecase"):
-        active_cases = RescueCase.objects.exclude(
-            status__in=(
-                RescueCase.Status.CLOSED,
-                RescueCase.Status.CANCELLED,
-            )
-        )
-    pending_applications = AdoptionApplication.objects.none()
-    if user.has_perm("adoptions.view_adoptionapplication"):
-        pending_applications = AdoptionApplication.objects.filter(
-            status__in=(
-                AdoptionApplication.Status.PENDING,
-                AdoptionApplication.Status.REVIEWING,
-            )
-        )
-    pending_safety_reports = AdoptionSafetyReport.objects.none()
-    if user.has_perm("adoptions.view_adoptionsafetyreport"):
-        pending_safety_reports = AdoptionSafetyReport.objects.filter(
-            status__in=(
-                AdoptionSafetyReport.Status.PENDING,
-                AdoptionSafetyReport.Status.REVIEWING,
-            )
-        )
-    due_check_ins = AdoptionCheckInRequest.objects.none()
-    if user.has_perm("adoptions.view_adoptioncheckinrequest"):
-        due_check_ins = AdoptionCheckInRequest.objects.filter(
-            due_on__lte=timezone.localdate(),
-            submitted_at__isnull=True,
-            placement__is_active=True,
-        )
-    pending_donations = Donation.objects.none()
-    if user.has_perm("donations.view_donation"):
-        pending_donations = Donation.objects.filter(status=Donation.Status.PENDING)
-    unread_notifications = Notification.objects.filter(
-        recipient=user,
-        is_read=False,
+    can_manage_cases = is_rescue_admin(user)
+    cases = RescueCase.objects.all() if can_manage_cases else RescueCase.objects.none()
+    terminal_statuses = (
+        RescueCase.Status.RESCUED,
+        RescueCase.Status.CLOSED,
+        RescueCase.Status.CANCELLED,
     )
+    active_cases = cases.exclude(status__in=terminal_statuses)
+    counts = cases.aggregate(
+        case_count=Count("pk"),
+        reported_case_count=Count("pk", filter=Q(status=RescueCase.Status.REPORTED)),
+        in_progress_case_count=Count("pk", filter=Q(status__in=(
+            RescueCase.Status.VERIFIED,
+            RescueCase.Status.ASSIGNED,
+            RescueCase.Status.IN_PROGRESS,
+        ))),
+        completed_case_count=Count("pk", filter=Q(status__in=terminal_statuses)),
+    )
+    can_support = is_support_operator(user)
     pending_support = SupportConversation.objects.none()
-    if is_support_operator(user):
+    if can_support:
         pending_support = SupportConversation.objects.filter(
             status=SupportConversation.Status.WAITING_ADMIN
         )
+        if not user.is_superuser:
+            pending_support = pending_support.filter(Q(assigned_to__isnull=True) | Q(assigned_to=user))
 
     return {
+        **counts,
+        "can_manage_cases": can_manage_cases,
+        "can_support": can_support,
         "active_case_count": active_cases.count(),
-        "critical_case_count": active_cases.filter(
-            urgency=RescueCase.Urgency.CRITICAL
-        ).count(),
-        "pending_application_count": pending_applications.count(),
-        "pending_safety_count": pending_safety_reports.count(),
-        "due_check_in_count": due_check_ins.count(),
-        "pending_donation_count": pending_donations.count(),
-        "unread_notification_count": unread_notifications.count(),
         "pending_support_count": pending_support.count(),
-        "recent_applications": pending_applications.select_related(
-            "animal",
-            "applicant",
-            "animal__organization",
-        ).order_by("-submitted_at")[:5],
-        "recent_safety_reports": pending_safety_reports.select_related(
-            "animal",
-            "reporter",
-        ).order_by("-submitted_at")[:4],
-        "recent_notifications": unread_notifications.order_by("-created_at")[:5],
+        "recent_cases": active_cases.order_by("-reported_at")[:8],
+        "pending_conversations": pending_support.select_related("user").order_by("-last_message_at")[:5],
     }

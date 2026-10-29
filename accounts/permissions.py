@@ -9,7 +9,7 @@ SUPPORT_PERMISSION = "support.handle_support"
 
 
 def is_support_operator(user):
-    """Return whether a user may work in the support/collaborator portal."""
+    """Kiểm tra tài khoản có quyền làm việc trong khu vực hỗ trợ và cộng tác viên."""
     if not user or not user.is_authenticated or not user.is_active:
         return False
     return bool(
@@ -32,7 +32,7 @@ def support_operator_required(view_func):
 
 
 def support_operator_queryset(user_model):
-    """Active operators, including users granted the explicit permission."""
+    """Lấy nhân sự hỗ trợ đang hoạt động, kể cả tài khoản được cấp quyền riêng."""
     return user_model.objects.filter(is_active=True).filter(
         Q(is_superuser=True)
         | Q(role=user_model.Role.COLLABORATOR)

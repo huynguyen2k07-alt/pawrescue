@@ -340,8 +340,8 @@ Ghi lại việc ăn uống, đi vệ sinh, mức vận động và những bi�
         ),
         "source_name": "Ready.gov — Pets and Animals",
         "source_url": "https://www.ready.gov/pets",
-        "is_featured": True,
-        "is_published": True,
+        "is_featured": False,
+        "is_published": False,
     },
     {
         "title": "Tiêm phòng dại bảo vệ pet và cả cộng đồng",
@@ -471,10 +471,19 @@ class Command(BaseCommand):
             contributor_created += int(created)
 
         for article in ARTICLES:
-            _article, created = KnowledgeArticle.objects.update_or_create(
-                slug=article["slug"],
-                defaults=article,
-            )
+            if not article["is_published"]:
+                _article, created = KnowledgeArticle.objects.get_or_create(
+                    slug=article["slug"],
+                    defaults=article,
+                )
+                KnowledgeArticle.objects.filter(
+                    pk=_article.pk, title=article["title"]
+                ).update(is_published=False, is_featured=False)
+            else:
+                _article, created = KnowledgeArticle.objects.update_or_create(
+                    slug=article["slug"],
+                    defaults=article,
+                )
             article_created += int(created)
 
         self.stdout.write(

@@ -11,7 +11,7 @@ PDF_SUFFIXES = {".pdf"}
 
 
 def sanitize_receipt_upload(uploaded_file):
-    """Verify an evidence upload by its bytes, not only its file extension."""
+    """Kiểm tra nội dung thực của chứng từ thay vì chỉ dựa vào đuôi tệp."""
     original_name = Path(getattr(uploaded_file, "name", "document")).name
     suffix = Path(original_name).suffix.lower()
     if suffix in IMAGE_SUFFIXES:

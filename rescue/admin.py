@@ -1,5 +1,6 @@
 from urllib.parse import urlencode
 
+from django import forms
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib import messages
@@ -12,11 +13,6 @@ from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
-from organizations.models import (
-    SYSTEM_ORGANIZATION_NAME,
-    OrganizationMembership,
-    RescueOrganization,
-)
 from support.models import SupportConversation
 
 from .models import (
@@ -32,16 +28,73 @@ from .models import (
     RescueUpdateImage,
 )
 from .notifications import case_participant_ids, create_case_notifications
+from .forms import CaseStatusUpdateForm
+from .geography import is_within_da_nang
+from .permissions import is_rescue_admin
+from .services import system_rescue_organization as _pawrescue_organization
+from .uploads import sanitize_image_upload
 from .widgets import PrivateAdminImageWidget
 
-
-PAWRESCUE_ORGANIZATION_NAME = SYSTEM_ORGANIZATION_NAME
 
 TERMINAL_CASE_STATUSES = {
     RescueCase.Status.RESCUED,
     RescueCase.Status.CLOSED,
     RescueCase.Status.CANCELLED,
 }
+
+
+class ValidatedAdminImageForm(forms.ModelForm):
+    """Hiển thị lỗi tải ảnh ngay trên biểu mẫu trước khi lưu tệp."""
+
+    def clean(self):
+        cleaned_data = super().clean()
+        for field in self._meta.model._meta.fields:
+            if not isinstance(field, db_models.FileField):
+                continue
+            uploaded_file = cleaned_data.get(field.name)
+            if not uploaded_file or getattr(uploaded_file, "_committed", False):
+                continue
+            try:
+                if uploaded_file.size > 5 * 1024 * 1024:
+                    raise forms.ValidationError("Mỗi ảnh phải nhỏ hơn 5 MB.")
+                cleaned_data[field.name] = sanitize_image_upload(uploaded_file)
+            except forms.ValidationError as error:
+                self.add_error(field.name, error)
+        return cleaned_data
+
+
+class RescueCaseAdminForm(ValidatedAdminImageForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        labels = {
+            "title": "Tiêu đề yêu cầu", "description": "Nội dung báo tin",
+            "animal_type": "Loài động vật", "animal_details": "Đặc điểm nhận dạng",
+            "urgency": "Mức độ khẩn cấp", "reporter": "Người báo tin",
+            "organization": "Đơn vị xử lý", "contact_name": "Tên liên hệ",
+            "contact_phone": "Số điện thoại", "address": "Địa chỉ hiện trường",
+            "latitude": "Vĩ độ", "longitude": "Kinh độ",
+            "is_location_private": "Bảo vệ vị trí chính xác",
+        }
+        for name, field in self.fields.items():
+            field.label = labels.get(name, field.label)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        latitude = cleaned_data.get("latitude")
+        longitude = cleaned_data.get("longitude")
+        location_changed = bool({"latitude", "longitude"} & set(self.changed_data))
+        if self.instance._state.adding or location_changed or latitude is not None or longitude is not None:
+            if latitude is None or longitude is None:
+                message = "Hãy chọn đầy đủ vị trí bằng cách đặt ghim trên bản đồ."
+                if latitude is None and "latitude" not in self.errors:
+                    self.add_error("latitude", message)
+                if longitude is None and "longitude" not in self.errors:
+                    self.add_error("longitude", message)
+            elif not is_within_da_nang(latitude, longitude):
+                message = "PawRescue hiện chỉ tiếp nhận ca trong phạm vi Đà Nẵng."
+                self.add_error("latitude", message)
+                self.add_error("longitude", message)
+        return cleaned_data
 
 
 def _feedback_gmail_url(feedback):
@@ -64,38 +117,6 @@ def _feedback_gmail_url(feedback):
             "body": body,
         }
     )
-
-
-def _pawrescue_organization(user=None):
-    organization, _created = RescueOrganization.objects.get_or_create(
-        is_system=True,
-        defaults={
-            "name": PAWRESCUE_ORGANIZATION_NAME,
-            "description": "Đội điều phối mặc định của trung tâm PawRescue.",
-            "is_verified": True,
-            "is_active": True,
-            "created_by": None,
-        },
-    )
-    organization_updates = []
-    if organization.name != PAWRESCUE_ORGANIZATION_NAME:
-        organization.name = PAWRESCUE_ORGANIZATION_NAME
-        organization_updates.append("name")
-    if not organization.is_verified:
-        organization.is_verified = True
-        organization_updates.append("is_verified")
-    if not organization.is_active:
-        organization.is_active = True
-        organization_updates.append("is_active")
-    if organization.created_by_id is not None:
-        organization.created_by = None
-        organization_updates.append("created_by")
-    if organization_updates:
-        organization.save(update_fields=organization_updates + ["updated_at"])
-    # PawRescue is a system identity, not a user-owned organization.  Staff
-    # authority comes from Django permissions rather than a hidden membership.
-    OrganizationMembership.objects.filter(organization=organization).delete()
-    return organization
 
 
 def _accept_case(case, organization, actor):
@@ -132,44 +153,49 @@ def _accept_case(case, organization, actor):
     return True
 
 
-class RescueCaseImageInline(admin.TabularInline):
+class PrivateRescueImagePreviewMixin:
+    @admin.display(description="Ảnh hiện trường")
+    def image_preview(self, obj):
+        if not obj or not obj.pk or not obj.image:
+            return "Chưa có ảnh."
+        route = "rescue:case-image" if isinstance(obj, RescueCaseImage) else "rescue:update-image"
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener noreferrer">Xem ảnh</a>',
+            reverse(route, args=(obj.pk,)),
+        )
+
+
+class RescueCaseImageInline(PrivateRescueImagePreviewMixin, admin.TabularInline):
     model = RescueCaseImage
+    form = ValidatedAdminImageForm
     extra = 1
     autocomplete_fields = ("uploaded_by",)
-    readonly_fields = ("uploaded_at",)
+    readonly_fields = ("image_preview", "uploaded_at")
     formfield_overrides = {
         db_models.FileField: {"widget": PrivateAdminImageWidget},
     }
 
 
-class RescueAssignmentInline(admin.TabularInline):
-    model = RescueAssignment
-    extra = 0
-    fk_name = "rescue_case"
-    autocomplete_fields = ("assignee", "assigned_by")
-    readonly_fields = ("assigned_at",)
+class RescueAdminOnlyMixin:
+    def has_module_permission(self, request):
+        return is_rescue_admin(request.user)
 
+    def has_view_permission(self, request, obj=None):
+        return is_rescue_admin(request.user)
 
-class CaseStatusHistoryInline(admin.TabularInline):
-    model = CaseStatusHistory
-    extra = 0
-    fields = ("from_status", "to_status", "changed_by", "note", "changed_at")
-    readonly_fields = fields
-    can_delete = False
+    def has_add_permission(self, request):
+        return is_rescue_admin(request.user)
 
-    def has_add_permission(self, request, obj=None):
-        return False
+    def has_change_permission(self, request, obj=None):
+        return is_rescue_admin(request.user)
 
-
-class RescueUpdateInline(admin.TabularInline):
-    model = RescueUpdate
-    extra = 0
-    autocomplete_fields = ("author",)
-    readonly_fields = ("created_at",)
+    def has_delete_permission(self, request, obj=None):
+        return is_rescue_admin(request.user)
 
 
 @admin.register(RescueCase)
-class RescueCaseAdmin(admin.ModelAdmin):
+class RescueCaseAdmin(RescueAdminOnlyMixin, admin.ModelAdmin):
+    form = RescueCaseAdminForm
     change_form_template = "admin/rescue/rescuecase/change_form.html"
     change_list_template = "admin/rescue/rescuecase/change_list.html"
     list_display = (
@@ -193,14 +219,18 @@ class RescueCaseAdmin(admin.ModelAdmin):
     autocomplete_fields = ("reporter", "organization")
     readonly_fields = ("status", "reported_at", "updated_at", "closed_at")
     actions = ("accept_selected_cases",)
-    save_on_top = True
+    save_on_top = False
     view_on_site = True
-    inlines = (
-        RescueCaseImageInline,
-        RescueAssignmentInline,
-        CaseStatusHistoryInline,
-        RescueUpdateInline,
+    inlines = (RescueCaseImageInline,)
+    fieldsets = (
+        ("Thông tin yêu cầu", {"fields": ("title", "description", ("animal_type", "urgency"), "animal_details")}),
+        ("Hiện trường và liên hệ", {"fields": ("address", ("latitude", "longitude"), "is_location_private", ("contact_name", "contact_phone"))}),
+        ("Thông tin tiếp nhận", {"classes": ("collapse",), "fields": ("reporter", "organization")}),
     )
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        return fields + ("reporter", "organization") if obj else fields
 
     def get_view_on_site_url(self, obj=None):
         if obj is None or obj.pk is None:
@@ -218,6 +248,9 @@ class RescueCaseAdmin(admin.ModelAdmin):
         return custom_urls + super().get_urls()
 
     def changelist_view(self, request, extra_context=None):
+        if request.GET.get("status__exact") == "":
+            request.GET = request.GET.copy()
+            request.GET.pop("status__exact", None)
         active_statuses = (
             RescueCase.Status.REPORTED,
             RescueCase.Status.VERIFIED,
@@ -232,6 +265,10 @@ class RescueCaseAdmin(admin.ModelAdmin):
         )
         extra_context = {
             **(extra_context or {}),
+            "title": "Yêu cầu cứu hộ",
+            "case_status_choices": RescueCase.Status.choices,
+            "selected_case_status": request.GET.get("status__exact", ""),
+            "has_delete_permission": self.has_delete_permission(request),
             "workflow_cases": cases.filter(status__in=active_statuses)[:12],
             "rescued_cases": cases.filter(status=RescueCase.Status.RESCUED)[:8],
             "rescue_counts": counts,
@@ -264,6 +301,7 @@ class RescueCaseAdmin(admin.ModelAdmin):
                 "Đã hủy ca cứu hộ.",
                 "Quản trị viên đã hủy ca cứu hộ.",
             ),
+            RescueCase.Status.CLOSED: ("Đã đánh giá và đóng ca cứu hộ.", ""),
         }
         if status not in allowed_statuses:
             raise Http404
@@ -273,6 +311,21 @@ class RescueCaseAdmin(admin.ModelAdmin):
             rescue_case = RescueCase.objects.select_for_update().get(
                 pk=rescue_case.pk
             )
+            if rescue_case.status in TERMINAL_CASE_STATUSES:
+                self.message_user(request, "Ca đã được chốt sổ, không thể đổi lại trạng thái.", level=messages.INFO)
+                return HttpResponseRedirect(reverse("admin:rescue_rescuecase_changelist"))
+            if status in TERMINAL_CASE_STATUSES:
+                review_form = CaseStatusUpdateForm(
+                    {"status": status, "note": request.POST.get("note", "")},
+                    current_status=rescue_case.status,
+                )
+                if not review_form.is_valid():
+                    self.message_user(request, "Hãy ghi đánh giá kết quả trước khi chốt ca.", level=messages.WARNING)
+                    return HttpResponseRedirect(
+                        reverse("rescue:case-detail", args=(rescue_case.pk,))
+                        + f"?review={status}#case-review"
+                    )
+                history_note = review_form.cleaned_data["note"]
             if (
                 status in {RescueCase.Status.VERIFIED, RescueCase.Status.RESCUED}
                 and rescue_case.organization_id is None
@@ -309,8 +362,16 @@ class RescueCaseAdmin(admin.ModelAdmin):
 
     def change_view(self, request, object_id, form_url="", extra_context=None):
         rescue_case = self.get_object(request, object_id)
+        if rescue_case is None:
+            raise Http404
+        if not self.has_change_permission(request, rescue_case):
+            raise PermissionDenied
+        if request.method == "GET" and request.GET.get("edit") != "1":
+            return HttpResponseRedirect(reverse("rescue:case-detail", args=(rescue_case.pk,)))
         extra_context = {
             **(extra_context or {}),
+            "title": "Sửa thông tin yêu cầu",
+            "subtitle": rescue_case.title,
             "accept_case_available": bool(
                 rescue_case
                 and rescue_case.organization_id is None
@@ -431,23 +492,33 @@ class RescueCaseAdmin(admin.ModelAdmin):
                     "Không thể tiếp nhận ca đã có đơn vị phụ trách hoặc đã kết thúc.",
                     level=messages.INFO,
                 )
-            return HttpResponseRedirect(".")
+            return HttpResponseRedirect(reverse("rescue:case-detail", args=(obj.pk,)))
+        if not any(name in request.POST for name in ("_continue", "_addanother", "_saveasnew")):
+            self.message_user(request, "Đã lưu thay đổi của yêu cầu.", level=messages.SUCCESS)
+            return HttpResponseRedirect(reverse("rescue:case-detail", args=(obj.pk,)))
         return super().response_change(request, obj)
+
+    def response_add(self, request, obj, post_url_continue=None):
+        if not any(name in request.POST for name in ("_continue", "_addanother", "_saveasnew")):
+            self.message_user(request, "Đã tạo yêu cầu cứu hộ.", level=messages.SUCCESS)
+            return HttpResponseRedirect(reverse("rescue:case-detail", args=(obj.pk,)))
+        return super().response_add(request, obj, post_url_continue)
 
 
 @admin.register(RescueCaseImage)
-class RescueCaseImageAdmin(admin.ModelAdmin):
+class RescueCaseImageAdmin(PrivateRescueImagePreviewMixin, RescueAdminOnlyMixin, admin.ModelAdmin):
+    form = ValidatedAdminImageForm
     list_display = ("rescue_case", "caption", "uploaded_by", "uploaded_at")
     search_fields = ("rescue_case__title", "caption")
     autocomplete_fields = ("rescue_case", "uploaded_by")
-    readonly_fields = ("uploaded_at",)
+    readonly_fields = ("image_preview", "uploaded_at")
     formfield_overrides = {
         db_models.FileField: {"widget": PrivateAdminImageWidget},
     }
 
 
 @admin.register(RescueAssignment)
-class RescueAssignmentAdmin(admin.ModelAdmin):
+class RescueAssignmentAdmin(RescueAdminOnlyMixin, admin.ModelAdmin):
     list_display = ("rescue_case", "assignee", "is_active", "assigned_at")
     list_filter = ("is_active",)
     search_fields = (
@@ -456,44 +527,65 @@ class RescueAssignmentAdmin(admin.ModelAdmin):
         "assignee__full_name",
     )
     autocomplete_fields = ("rescue_case", "assignee", "assigned_by")
-    readonly_fields = ("assigned_at",)
+    readonly_fields = ("rescue_case", "workflow_link", "assignee", "assigned_by", "notes", "is_active", "assigned_at", "completed_at")
+
+    @admin.display(description="Điều phối ca")
+    def workflow_link(self, obj):
+        return format_html(
+            '<a href="{}">Mở ca để phân công hoặc gỡ phân công</a>',
+            reverse("rescue:case-detail", args=(obj.rescue_case_id,)),
+        )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        resolver_match = getattr(request, "resolver_match", None)
+        return bool(
+            is_rescue_admin(request.user)
+            and resolver_match
+            and resolver_match.url_name in {
+                "rescue_rescuecase_delete",
+                "rescue_rescuecase_changelist",
+            }
+        )
 
 
-@admin.register(CaseStatusHistory)
-class CaseStatusHistoryAdmin(admin.ModelAdmin):
-    list_display = (
-        "rescue_case",
-        "from_status",
-        "to_status",
-        "changed_by",
-        "changed_at",
-    )
-    list_filter = ("to_status",)
-    search_fields = ("rescue_case__title", "changed_by__email", "note")
-    autocomplete_fields = ("rescue_case", "changed_by")
-    readonly_fields = ("changed_at",)
-
-
-class RescueUpdateImageInline(admin.TabularInline):
+class RescueUpdateImageInline(PrivateRescueImagePreviewMixin, admin.TabularInline):
     model = RescueUpdateImage
-    extra = 1
-    readonly_fields = ("uploaded_at",)
+    form = ValidatedAdminImageForm
+    extra = 0
+    fields = ("image_preview", "uploaded_at")
+    readonly_fields = fields
+    can_delete = False
     formfield_overrides = {
         db_models.FileField: {"widget": PrivateAdminImageWidget},
     }
 
+    def has_add_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(RescueUpdate)
-class RescueUpdateAdmin(admin.ModelAdmin):
+class RescueUpdateAdmin(RescueAdminOnlyMixin, admin.ModelAdmin):
     list_display = ("rescue_case", "author", "created_at")
     search_fields = ("rescue_case__title", "author__email", "note")
     autocomplete_fields = ("rescue_case", "author")
     readonly_fields = ("created_at",)
     inlines = (RescueUpdateImageInline,)
 
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(Notification)
-class NotificationAdmin(admin.ModelAdmin):
+class NotificationAdmin(RescueAdminOnlyMixin, admin.ModelAdmin):
     list_display = (
         "recipient",
         "kind",
@@ -515,6 +607,7 @@ class NotificationAdmin(admin.ModelAdmin):
 
 @admin.register(KnowledgeArticle)
 class KnowledgeArticleAdmin(admin.ModelAdmin):
+    form = ValidatedAdminImageForm
     list_display = (
         "title",
         "category",
@@ -533,6 +626,7 @@ class KnowledgeArticleAdmin(admin.ModelAdmin):
 
 @admin.register(ContributorProfile)
 class ContributorProfileAdmin(admin.ModelAdmin):
+    form = ValidatedAdminImageForm
     list_display = ("name", "role", "display_order", "is_active")
     list_editable = ("display_order", "is_active")
     list_filter = ("is_active",)
@@ -549,7 +643,7 @@ class ContributorProfileAdmin(admin.ModelAdmin):
 
 
 @admin.register(CommunityFeedback)
-class CommunityFeedbackAdmin(admin.ModelAdmin):
+class CommunityFeedbackAdmin(RescueAdminOnlyMixin, admin.ModelAdmin):
     change_list_template = "admin/rescue/communityfeedback/change_list.html"
     change_form_template = "admin/rescue/communityfeedback/change_form.html"
     list_display = (
@@ -612,7 +706,10 @@ class CommunityFeedbackAdmin(admin.ModelAdmin):
         return custom_urls + super().get_urls()
 
     def changelist_view(self, request, extra_context=None):
-        feedback_queryset = self.get_queryset(request).select_related("user")
+        response = super().changelist_view(request, extra_context=extra_context)
+        if not getattr(response, "context_data", None) or "cl" not in response.context_data:
+            return response
+        feedback_queryset = response.context_data["cl"].queryset.select_related("user")
         counts = feedback_queryset.aggregate(
             new=Count(
                 "id",
@@ -630,12 +727,11 @@ class CommunityFeedbackAdmin(admin.ModelAdmin):
         feedback_items = list(feedback_queryset[:20])
         for feedback in feedback_items:
             feedback.gmail_reply_url = _feedback_gmail_url(feedback)
-        extra_context = {
-            **(extra_context or {}),
+        response.context_data.update({
             "feedback_counts": counts,
             "feedback_items": feedback_items,
-        }
-        return super().changelist_view(request, extra_context=extra_context)
+        })
+        return response
 
     def change_view(self, request, object_id, form_url="", extra_context=None):
         feedback = self.get_object(request, object_id)

@@ -19,13 +19,16 @@ urlpatterns = [
     path("case-images/<int:pk>/", views.case_image, name="case-image"),
     path("update-images/<int:pk>/", views.update_image, name="update-image"),
     path("cases/<int:pk>/", views.case_detail, name="case-detail"),
+    path("cases/<int:pk>/messages/", views.case_messages, name="case-messages"),
     path("cases/<int:pk>/claim/", views.case_claim, name="case-claim"),
+    path("cases/<int:pk>/handoff/", views.case_handoff, name="case-handoff"),
     path(
         "cases/<int:pk>/status/",
         views.case_update_status,
         name="case-update-status",
     ),
     path("cases/<int:pk>/assign/", views.case_assign, name="case-assign"),
+    path("cases/<int:pk>/assignments/<int:assignment_pk>/end/", views.case_unassign, name="case-unassign"),
     path(
         "cases/<int:pk>/updates/new/",
         views.case_add_update,

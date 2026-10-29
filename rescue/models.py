@@ -102,6 +102,7 @@ class RescueCase(models.Model):
         return f"#{self.pk} - {self.title}" if self.pk else self.title
 
     def change_status(self, new_status, changed_by=None, note=""):
+        # Lưu trạng thái, thời điểm chốt và lịch sử cùng nhau để hồ sơ cứu hộ luôn nhất quán.
         valid_statuses = {value for value, _label in self.Status.choices}
         if new_status not in valid_statuses:
             raise ValidationError({"status": "Invalid rescue case status."})
@@ -284,6 +285,33 @@ class RescueUpdateImage(models.Model):
         return super().save(*args, **kwargs)
 
 
+class RescueCaseMessage(models.Model):
+    rescue_case = models.ForeignKey(
+        RescueCase, on_delete=models.CASCADE, related_name="private_messages"
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sent_case_messages",
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="received_case_messages",
+    )
+    body = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("created_at", "pk")
+        verbose_name = "tin nhắn điều phối"
+        verbose_name_plural = "tin nhắn điều phối"
+
+    def __str__(self):
+        return f"Tin nhắn điều phối ca #{self.rescue_case_id}"
+
+
 class Notification(models.Model):
     class Kind(models.TextChoices):
         CASE_REPORTED = "case_reported", "Có tin báo cứu hộ mới"
@@ -291,6 +319,7 @@ class Notification(models.Model):
         CASE_ASSIGNED = "case_assigned", "Ca đã được phân công"
         STATUS_CHANGED = "status_changed", "Trạng thái đã thay đổi"
         CASE_UPDATED = "case_updated", "Nhật ký cứu hộ mới"
+        CASE_MESSAGE = "case_message", "Tin nhắn điều phối riêng"
         ADOPTION_SUBMITTED = "adoption_submitted", "Có đơn nhận nuôi mới"
         ADOPTION_REVIEWED = "adoption_reviewed", "Đơn nhận nuôi đã được xét duyệt"
         ADOPTION_FOLLOW_UP = "adoption_follow_up", "Nhắc theo dõi sau nhận nuôi"

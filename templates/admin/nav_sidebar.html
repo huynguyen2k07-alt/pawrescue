@@ -1,0 +1,15 @@
+<button class="sticky toggle-nav-sidebar" id="toggle-nav-sidebar" aria-label="Đóng hoặc mở thanh điều hướng" type="button"></button>
+<nav class="sticky paw-operational-sidebar" id="nav-sidebar" aria-label="Điều hướng quản trị">
+    <input id="nav-filter" type="hidden" value="">
+    <div class="paw-operational-heading">Điều phối cứu hộ</div>
+    <div class="paw-operational-nav">
+        {% for item in operational_nav %}
+            <a href="{{ item.url }}"{% if item.active %} class="is-active" aria-current="page"{% endif %}>
+                <strong>{{ item.label }}</strong>
+                <small>{{ item.description }}</small>
+            </a>
+        {% empty %}
+            <p>Chưa có khu vực được cấp quyền.</p>
+        {% endfor %}
+    </div>
+</nav>

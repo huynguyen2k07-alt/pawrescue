@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class AdoptionFollowUpReminderMiddleware:
-    """Dispatch due reminders periodically without requiring a task worker."""
+    """Định kỳ gửi lời nhắc đến hạn mà không cần tiến trình chạy tác vụ riêng."""
 
     def __init__(self, get_response):
         self.get_response = get_response

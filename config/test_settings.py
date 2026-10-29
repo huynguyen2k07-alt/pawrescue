@@ -1,4 +1,4 @@
-"""Fast, isolated settings for the automated test and local browser smoke suite."""
+"""Cấu hình kiểm thử tự động với cơ sở dữ liệu và vùng lưu tệp riêng."""
 
 import os
 from pathlib import Path

@@ -1,11 +1,12 @@
 from django import forms
-from django.contrib.auth import get_user_model
-from django.core.validators import FileExtensionValidator
+from django.core.validators import FileExtensionValidator, MaxLengthValidator
 
-from organizations.models import OrganizationMembership, RescueOrganization
+from organizations.models import RescueOrganization
+from organizations.permissions import managed_organizations
 
 from .geography import is_within_da_nang
 from .models import CommunityFeedback, RescueAssignment, RescueCase, RescueUpdate
+from .permissions import eligible_assignees
 from .uploads import sanitize_image_upload
 
 
@@ -111,6 +112,7 @@ class RescueCaseForm(forms.ModelForm):
         }
 
     def clean(self):
+        # Tin báo phải có đủ tọa độ trong phạm vi Đà Nẵng để xác định đúng hiện trường.
         cleaned_data = super().clean()
         latitude = cleaned_data.get("latitude")
         longitude = cleaned_data.get("longitude")
@@ -147,30 +149,73 @@ class CaseStatusUpdateForm(forms.Form):
             for choice in RescueCase.Status.choices
             if choice[0] != current_status
         ]
+        self.fields["note"].label = "Đánh giá kết quả / ghi chú"
+        self.fields["note"].help_text = (
+            "Bắt buộc ghi đánh giá kết quả trước khi xác nhận cứu thành công, đóng hoặc hủy ca."
+        )
+
+    def clean(self):
+        # Bắt buộc ghi đánh giá trước khi xác nhận cứu thành công, đóng hoặc hủy ca.
+        cleaned_data = super().clean()
+        if cleaned_data.get("status") in {
+            RescueCase.Status.RESCUED,
+            RescueCase.Status.CLOSED,
+            RescueCase.Status.CANCELLED,
+        } and not cleaned_data.get("note", "").strip():
+            self.add_error("note", "Hãy ghi đánh giá kết quả trước khi chốt ca.")
+        return cleaned_data
 
 
 class RescueAssignmentForm(forms.ModelForm):
     class Meta:
         model = RescueAssignment
         fields = ("assignee", "notes")
-        labels = {"assignee": "Thành viên", "notes": "Ghi chú phân công"}
+        labels = {"assignee": "Người phụ trách", "notes": "Chỉ dẫn riêng cho người phụ trách"}
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
-        user_model = get_user_model()
-        if organization is None:
-            self.fields["assignee"].queryset = user_model.objects.none()
-            return
+        self.fields["assignee"].queryset = eligible_assignees()
+        self.fields["notes"].max_length = 1500
+        self.fields["notes"].validators.append(MaxLengthValidator(1500))
 
-        member_ids = OrganizationMembership.objects.filter(
-            organization=organization,
-            is_active=True,
-        ).values_list("user_id", flat=True)
-        self.fields["assignee"].queryset = user_model.objects.filter(
-            id__in=member_ids,
-            is_active=True,
-        ).order_by("full_name", "email")
+
+class CaseHandoffForm(forms.Form):
+    organization = forms.ModelChoiceField(
+        queryset=RescueOrganization.objects.none(),
+        label="Đơn vị nhận xử lý",
+        empty_label="Chọn đơn vị cứu hộ",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["organization"].queryset = RescueOrganization.objects.filter(
+            is_active=True, is_verified=True, is_system=False,
+        ).order_by("name")
+
+    def clean_organization(self):
+        organization = self.cleaned_data["organization"]
+        if not (organization.phone.strip() or organization.email.strip()):
+            raise forms.ValidationError("Hãy bổ sung số điện thoại hoặc email của đơn vị trước khi bàn giao.")
+        return organization
+
+
+class RescueCaseMessageForm(forms.Form):
+    recipient = forms.ModelChoiceField(
+        queryset=None,
+        label="Gửi cho",
+    )
+    body = forms.CharField(
+        max_length=2000,
+        label="Tin nhắn riêng",
+        widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Trao đổi chỉ dành cho admin và người được phân công..."}),
+    )
+
+    def __init__(self, *args, recipients, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["recipient"].queryset = recipients
+        if recipients.count() == 1:
+            self.fields["recipient"].initial = recipients.first().pk
 
 
 class RescueUpdateForm(forms.ModelForm):
@@ -210,27 +255,7 @@ class ClaimOrganizationForm(forms.Form):
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
-        if user is None or not user.is_authenticated:
-            return
-
-        if user.is_superuser:
-            self.fields["organization"].queryset = RescueOrganization.objects.filter(
-                is_active=True,
-                is_verified=True,
-            )
-            return
-
-        self.fields["organization"].queryset = RescueOrganization.objects.filter(
-            memberships__user=user,
-            memberships__is_active=True,
-            memberships__role__in=(
-                OrganizationMembership.Role.OWNER,
-                OrganizationMembership.Role.MANAGER,
-            ),
-            is_active=True,
-            is_verified=True,
-            is_system=False,
-        ).distinct()
+        self.fields["organization"].queryset = managed_organizations(user)
 
 
 class CommunityFeedbackForm(forms.ModelForm):

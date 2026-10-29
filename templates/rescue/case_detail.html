@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static l10n %}
 
 {% block title %}{{ case.title }} · PawRescue{% endblock %}
 
@@ -8,8 +8,18 @@
 {% endblock %}
 
 {% block content %}
-<section class="section container">
-    <a class="back-link" href="{% url 'rescue:case-list' %}">← Quay lại danh sách</a>
+<section class="section container case-workspace">
+    <div class="case-workspace-topbar">
+        {% if can_manage %}
+            <a class="back-link" href="{% url 'admin:rescue_rescuecase_changelist' %}">← Danh sách tin báo</a>
+            <nav class="case-record-links" aria-label="Chỉnh sửa tin báo">
+                <a href="{% url 'admin:rescue_rescuecase_change' case.pk %}?edit=1">Sửa thông tin</a>
+                <a class="danger-link" href="{% url 'admin:rescue_rescuecase_delete' case.pk %}">Xóa bài</a>
+            </nav>
+        {% else %}
+            <a class="back-link" href="{% url 'rescue:case-list' %}">← Danh sách tin cứu hộ</a>
+        {% endif %}
+    </div>
 
     <div class="detail-layout">
         <div class="detail-main">
@@ -21,9 +31,14 @@
                             <span class="urgency urgency-{{ case.urgency }}">{{ case.get_urgency_display }}</span>
                         </div>
                         <h1>{{ case.title }}</h1>
-                        <p class="detail-date">Tin báo #{{ case.pk }} · {{ case.reported_at|date:"H:i, d/m/Y" }}</p>
+                        <p class="detail-date">Tin báo #{{ case.pk }} · {{ case.reported_at|date:"H:i, d/m/Y" }} · {{ case.get_animal_type_display }}</p>
                     </div>
-                    <span class="animal-badge">{{ case.get_animal_type_display }}</span>
+                </div>
+
+                <div class="detail-section">
+                    <h2>Thông tin hiện trường</h2>
+                    <p>{{ case.description|linebreaksbr }}</p>
+                    {% if case.animal_details %}<p><strong>Đặc điểm nhận dạng:</strong> {{ case.animal_details }}</p>{% endif %}
                 </div>
 
                 {% with images=case.images.all %}
@@ -31,7 +46,7 @@
                         <div class="image-gallery">
                             {% for item in images %}
                                 <figure>
-                                    <img src="{% url 'rescue:case-image' item.pk %}" alt="{{ item.caption|default:case.title }}">
+                                    <a href="{% url 'rescue:case-image' item.pk %}" target="_blank" rel="noopener"><img src="{% url 'rescue:case-image' item.pk %}" alt="{{ item.caption|default:case.title }}"></a>
                                     {% if item.caption %}<figcaption>{{ item.caption }}</figcaption>{% endif %}
                                 </figure>
                             {% endfor %}
@@ -39,39 +54,24 @@
                     {% endif %}
                 {% endwith %}
 
-                <div class="detail-section">
-                    <h2>Tình trạng hiện trường</h2>
-                    <p>{{ case.description|linebreaksbr }}</p>
-                    {% if case.animal_details %}
-                        <p><strong>Đặc điểm nhận dạng:</strong> {{ case.animal_details }}</p>
-                    {% endif %}
-                </div>
-
-                <div class="fact-grid">
+                <div class="fact-grid case-summary">
                     <div>
                         <span>Địa điểm</span>
                         <strong>{% if case.is_location_private and not can_view_location %}Vị trí chính xác được bảo vệ{% else %}{{ case.address }}{% endif %}</strong>
                     </div>
                     <div>
-                        <span>Tổ chức phụ trách</span>
-                        <strong>{{ case.organization.name|default:"Chưa có tổ chức tiếp nhận" }}</strong>
+                        <span>Đơn vị phụ trách</span>
+                        <strong>{{ case.organization.name|default:"Chờ tiếp nhận" }}</strong>
                     </div>
-                    {% if can_view_contact %}
+                    {% if can_view_contact %}{# Liên hệ và vị trí chính xác chỉ cung cấp theo quyền xem ca. #}
                         <div>
-                            <span>Người liên hệ</span>
-                            <strong>
-                                {% if case.contact_name %}
-                                    {{ case.contact_name }}
-                                {% elif case.reporter %}
-                                    {{ case.reporter.full_name|default:case.reporter.email }}
-                                {% else %}
-                                    Không cung cấp
-                                {% endif %}
-                            </strong>
+                            <span>Người báo tin</span>
+                            <strong>{% if case.contact_name %}{{ case.contact_name }}{% elif case.reporter %}{{ case.reporter.full_name|default:case.reporter.email }}{% else %}Không cung cấp{% endif %}</strong>
+                            {% if case.reporter %}<small>{{ case.reporter.email }}</small>{% endif %}
                         </div>
                         <div>
-                            <span>Số điện thoại</span>
-                            <strong>{{ case.contact_phone|default:"Không cung cấp" }}</strong>
+                            <span>Điện thoại liên hệ</span>
+                            {% if case.contact_phone %}<a href="tel:{{ case.contact_phone }}">{{ case.contact_phone }}</a>{% else %}<strong>Không cung cấp</strong>{% endif %}
                         </div>
                     {% endif %}
                 </div>
@@ -81,26 +81,19 @@
                         <div
                             class="map detail-map"
                             data-case-map
-                            data-latitude="{{ map_latitude }}"
-                            data-longitude="{{ map_longitude }}"
+                            data-latitude="{{ map_latitude|unlocalize }}"
+                            data-longitude="{{ map_longitude|unlocalize }}"
                             data-maptiler-key="{{ maptiler_api_key }}"
                             data-title="{{ case.title }}"
                             data-approximate="{% if map_is_approximate %}true{% else %}false{% endif %}"
                         ></div>
-                        {% if map_is_approximate %}
-                            <p class="privacy-note">Vị trí hiển thị đã được làm gần đúng để bảo vệ động vật và người báo tin.</p>
-                        {% endif %}
+                        {% if map_is_approximate %}<p class="privacy-note">Vị trí đã được làm gần đúng để bảo vệ động vật và người báo tin.</p>{% endif %}
                     </div>
                 {% endif %}
             </article>
 
-            <section class="panel detail-panel">
-                <div class="panel-heading">
-                    <div>
-                        <span class="eyebrow eyebrow-dark">Dòng thời gian</span>
-                        <h2>Lịch sử xử lý</h2>
-                    </div>
-                </div>
+            <details class="panel detail-panel case-history" id="case-history"{% if request.GET.history %} open{% endif %}>
+                <summary>Lịch sử xử lý</summary>
                 <ol class="timeline">
                     {% for item in timeline_items %}
                         {% if item.type == "update" %}
@@ -108,23 +101,14 @@
                                 <li class="timeline-update">
                                     <span class="timeline-dot timeline-dot-update"></span>
                                     <div>
-                                        <div class="timeline-heading-row">
-                                            <strong>Cập nhật hiện trường</strong>
-                                            <time>{{ update.created_at|date:"H:i, d/m/Y" }}</time>
-                                        </div>
+                                        <div class="timeline-heading-row"><strong>Cập nhật hiện trường</strong><time>{{ update.created_at|date:"H:i, d/m/Y" }}</time></div>
                                         <p>{{ update.note|linebreaksbr }}</p>
                                         {% with update_images=update.images.all %}
-                                            {% if update_images %}
-                                                <div class="update-image-grid">
-                                                    {% for item_image in update_images %}
-                                                        <a href="{% url 'rescue:update-image' item_image.pk %}" target="_blank" rel="noopener" aria-label="Mở ảnh cập nhật {{ forloop.counter }}">
-                                                            <img src="{% url 'rescue:update-image' item_image.pk %}" alt="Ảnh cập nhật cho {{ case.title }}">
-                                                        </a>
-                                                    {% endfor %}
-                                                </div>
-                                            {% endif %}
+                                            {% if update_images %}<div class="update-image-grid">
+                                                {% for item_image in update_images %}<a href="{% url 'rescue:update-image' item_image.pk %}" target="_blank" rel="noopener"><img src="{% url 'rescue:update-image' item_image.pk %}" alt="Ảnh cập nhật {{ forloop.counter }} cho {{ case.title }}" loading="lazy"></a>{% endfor %}
+                                            </div>{% endif %}
                                         {% endwith %}
-                                        {% if update.author %}<small>Đăng bởi {{ update.author.full_name|default:update.author.email }}</small>{% endif %}
+                                        {% if update.author %}<small>{{ update.author.full_name|default:update.author.email }}</small>{% endif %}
                                     </div>
                                 </li>
                             {% endwith %}
@@ -133,128 +117,136 @@
                                 <li>
                                     <span class="timeline-dot"></span>
                                     <div>
-                                        <div class="timeline-heading-row">
-                                            <strong>{{ history.get_to_status_display }}</strong>
-                                            <time>{{ history.changed_at|date:"H:i, d/m/Y" }}</time>
-                                        </div>
-                                        {% if history.note %}<p>{{ history.note }}</p>{% endif %}
-                                        {% if history.changed_by %}<small>Cập nhật bởi {{ history.changed_by.full_name|default:history.changed_by.email }}</small>{% endif %}
+                                        <div class="timeline-heading-row"><strong>{{ history.get_to_status_display }}</strong><time>{{ history.changed_at|date:"H:i, d/m/Y" }}</time></div>
+                                        {% if history.note %}<p>{{ history.note|linebreaksbr }}</p>{% endif %}
+                                        {% if history.changed_by %}<small>{{ history.changed_by.full_name|default:history.changed_by.email }}</small>{% endif %}
                                     </div>
                                 </li>
                             {% endwith %}
                         {% endif %}
-                    {% empty %}
-                        <li class="timeline-empty">Tin báo vừa được tạo và đang chờ tiếp nhận.</li>
-                    {% endfor %}
+                    {% empty %}<li class="timeline-empty">Tin báo đang chờ tiếp nhận.</li>{% endfor %}
                 </ol>
-            </section>
+            </details>
         </div>
 
         <aside class="detail-sidebar">
-            {% if adoption_profile %}
-                <section class="panel action-panel adoption-handoff-card">
-                    <span class="eyebrow eyebrow-dark">Hành trình tiếp theo</span>
-                    <h2>{{ adoption_profile.name }} đang tìm gia đình</h2>
-                    <p>Ca cứu hộ này đã có hồ sơ nhận nuôi.</p>
-                    <a class="button button-accent button-block" href="{% url 'adoptions:animal-detail' adoption_profile.pk %}">Xem hồ sơ nhận nuôi</a>
-                </section>
-            {% elif can_create_adoption_profile %}
-                <section class="panel action-panel adoption-handoff-card">
-                    <span class="eyebrow eyebrow-dark">Hành trình tiếp theo</span>
-                    <h2>Tìm một mái nhà mới</h2>
-                    <p>Chuyển thông tin của ca đã cứu thành hồ sơ nhận nuôi.</p>
-                    <a class="button button-accent button-block" href="{% url 'adoptions:animal-create' %}?case={{ case.pk }}">Tạo hồ sơ nhận nuôi</a>
-                </section>
-            {% endif %}
-
             {% if can_manage %}
-                <section class="panel action-panel fundraising-handoff-card">
-                    <span class="eyebrow eyebrow-dark">Hỗ trợ tài chính</span>
-                    <h2>Gây quỹ cho ca này</h2>
-                    <p>Tạo chiến dịch và công khai các khoản thu chi liên quan.</p>
-                    <a class="button button-ghost button-block" href="{% url 'donations:campaign-create' %}?case={{ case.pk }}">Tạo chiến dịch gây quỹ</a>
+                <section class="panel action-panel case-operations" aria-label="Xử lý tin báo">
+                    <h2>Xử lý tin báo</h2>
+                    {% for assignment in private_assignments %}{% if assignment.is_active %}<p class="case-current-handler">Người phụ trách: <strong>{{ assignment.assignee.full_name|default:assignment.assignee.email }}</strong></p>{% endif %}{% endfor %}
+                    <div class="case-operation-list">
+                        {% if case.reporter_id %}
+                            <form method="post" action="{% url 'support:open-case-chat' case.pk %}">
+                                {% csrf_token %}<button class="button button-primary button-block" type="submit">Nhắn người báo tin</button>
+                            </form>
+                        {% endif %}
+                        {% if can_decide %}{# Chỉ quản trị viên phân công và ghi đánh giá trước khi chốt ca. #}
+                            {% if not case.organization_id %}
+                                <form method="post" action="{% url 'rescue:case-claim' case.pk %}">
+                                    {% csrf_token %}<button class="button button-ghost button-block" type="submit">Xác nhận / tiếp nhận</button>
+                                </form>
+                            {% elif case.status == 'reported' %}
+                                <form method="post" action="{% url 'rescue:case-update-status' case.pk %}">
+                                    {% csrf_token %}<input type="hidden" name="status" value="verified"><input type="hidden" name="note" value="Đã kiểm tra và xác nhận tin báo.">
+                                    <button class="button button-ghost button-block" type="submit">Xác nhận tin báo</button>
+                                </form>
+                            {% endif %}
+
+                            <details class="case-operation" id="case-handoff">
+                                <summary>Chuyển cho đơn vị cứu hộ</summary>
+                                {% if handoff_form.organization.field.queryset %}
+                                    <form class="case-operation-body" method="post" action="{% url 'rescue:case-handoff' case.pk %}">
+                                        {% csrf_token %}
+                                        {{ handoff_form.non_field_errors }}
+                                        {% for field in handoff_form %}<div class="field">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>{% endfor %}
+                                        <button class="button button-primary button-block" type="submit">Chuyển đơn vị xử lý</button>
+                                    </form>
+                                {% else %}
+                                    <div class="case-operation-body"><p>Chưa có đơn vị cứu hộ sẵn sàng nhận ca.</p><a href="{% url 'admin:organizations_rescueorganization_add' %}">Thêm đơn vị cứu hộ</a></div>
+                                {% endif %}
+                            </details>
+
+                            <details class="case-operation" id="case-review"{% if request.GET.review %} open{% endif %}>
+                                <summary>Hoàn tất / xử lý không thành</summary>
+                                <form class="case-operation-body" method="post" action="{% url 'rescue:case-update-status' case.pk %}">
+                                    {% csrf_token %}
+                                    {{ status_form.non_field_errors }}
+                                    {% for field in status_form %}<div class="field">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>{% endfor %}
+                                    <button class="button button-primary button-block" type="submit">Lưu đánh giá và chốt ca</button>
+                                </form>
+                            </details>
+
+                            <details class="case-operation" id="case-assign">
+                                <summary>Giao người phụ trách</summary>
+                                <form class="case-operation-body" method="post" action="{% url 'rescue:case-assign' case.pk %}">
+                                    {% csrf_token %}
+                                    {{ assignment_form.non_field_errors }}
+                                    {% for field in assignment_form %}<div class="field">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endfor %}
+                                    <button class="button button-ghost button-block" type="submit">Giao ca và gửi chỉ dẫn</button>
+                                </form>
+                            </details>
+                        {% endif %}
+                        {% if private_assignments %}<a class="button button-ghost button-block" href="{% url 'rescue:case-messages' case.pk %}">Trao đổi riêng với người xử lý</a>{% endif %}
+                    </div>
+                </section>
+            {% elif can_coordinate %}
+                <section class="panel action-panel case-member-status">
+                    <h2>Ca được giao cho bạn</h2>
+                    <p>Xem vị trí, cập nhật tình hình và báo kết quả cho admin.</p>
+                    <a class="button button-primary button-block" href="{% url 'rescue:case-messages' case.pk %}">Nhắn admin</a>
+                </section>
+            {% elif user.is_authenticated and case.reporter_id == user.pk %}
+                <section class="panel action-panel case-member-status">
+                    <h2>Theo dõi tin báo</h2>
+                    <p>Quản trị viên sẽ kiểm tra thông tin và liên hệ với bạn khi cần.</p>
+                    <a class="button button-ghost button-block" href="{% url 'rescue:notification-list' %}">Xem thông báo</a>
+                    {% if not support_is_operator %}<p class="privacy-note">Bạn có thể gửi thêm thông tin qua cửa sổ chat hỗ trợ.</p>{% endif %}
                 </section>
             {% endif %}
 
-            {% if can_claim %}
-                <section class="panel action-panel action-highlight">
-                    <span class="eyebrow">Dành cho điều phối viên</span>
-                    <h2>Tiếp nhận ca này</h2>
-                    <p>Chọn tổ chức sẽ chịu trách nhiệm điều phối ca cứu hộ.</p>
-                    <form method="post" action="{% url 'rescue:case-claim' case.pk %}">
-                        {% csrf_token %}
-                        {{ claim_form.organization.label_tag }}
-                        {{ claim_form.organization }}
-                        <button class="button button-accent button-block" type="submit">Xác nhận tiếp nhận</button>
-                    </form>
+            {% if is_terminal %}
+                <section class="panel action-panel case-member-status">
+                    <h2>Ca đã được chốt sổ</h2>
+                    <strong>{{ case.get_status_display }}</strong>
+                    {% if case.closed_at %}<p>{{ case.closed_at|date:"H:i, d/m/Y" }}</p>{% endif %}
+                    <a href="?history=1#case-history">Xem đánh giá trong lịch sử</a>
                 </section>
+            {% endif %}
+
+            {% if can_coordinate %}
+                <details class="panel action-panel case-assignment-summary"{% if case.organization_id and not case.organization.is_system %} open{% endif %}>
+                    <summary>Bên đang xử lý</summary>
+                    <div class="case-operation-body">
+                        {% if case.organization %}
+                            <strong>{{ case.organization.name }}</strong>
+                            {% if not case.organization.is_system and not is_terminal %}<p>Liên hệ đơn vị để xác nhận tiếp nhận.</p>{% endif %}
+                            {% if case.organization.phone %}<p><a href="tel:{{ case.organization.phone }}">Gọi {{ case.organization.phone }}</a></p>{% endif %}
+                            {% if handoff_email_url %}<p><a href="{{ handoff_email_url }}">Soạn email bàn giao</a></p>{% elif case.organization.email %}<p><a href="mailto:{{ case.organization.email }}">{{ case.organization.email }}</a></p>{% endif %}
+                        {% endif %}
+                        {% for assignment in private_assignments %}
+                            <div class="private-assignment-note">
+                                <strong>{{ assignment.assignee.full_name|default:assignment.assignee.email }}</strong>
+                                {% if assignment.notes %}<p>{{ assignment.notes|linebreaksbr }}</p>{% endif %}
+                                {% if assignment.is_active %}
+                                    {% if can_manage %}<form method="post" action="{% url 'rescue:case-unassign' case.pk assignment.pk %}">{% csrf_token %}<button class="button button-ghost button-small" type="submit">Kết thúc phân công</button></form>{% endif %}
+                                {% else %}<small>Phân công đã kết thúc.</small>{% endif %}
+                            </div>
+                        {% empty %}{% if not case.organization %}<p class="muted">Chưa giao bên xử lý.</p>{% endif %}{% endfor %}
+                    </div>
+                </details>
             {% endif %}
 
             {% if can_add_update %}
-                <section class="panel action-panel update-composer">
-                    <span class="eyebrow eyebrow-dark">Nhật ký hiện trường</span>
-                    <h2>Thêm cập nhật mới</h2>
-                    <p>Ghi lại tình trạng, việc đã làm và ảnh mới nhất của ca cứu hộ.</p>
-                    <form method="post" enctype="multipart/form-data" action="{% url 'rescue:case-add-update' case.pk %}">
+                <details class="panel action-panel case-operation update-composer">
+                    <summary>Cập nhật hiện trường</summary>
+                    <form class="case-operation-body" method="post" enctype="multipart/form-data" action="{% url 'rescue:case-add-update' case.pk %}">
                         {% csrf_token %}
-                        {% for field in update_form %}
-                            <div class="field">
-                                {{ field.label_tag }}
-                                {{ field }}
-                                {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-                            </div>
-                        {% endfor %}
-                        <button class="button button-accent button-block" type="submit">Đăng cập nhật</button>
+                        {{ update_form.non_field_errors }}
+                        {% for field in update_form %}<div class="field">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>{% endfor %}
+                        <button class="button button-primary button-block" type="submit">Gửi cập nhật</button>
                     </form>
-                </section>
+                </details>
             {% endif %}
-
-            {% if can_manage %}
-                <section class="panel action-panel">
-                    <h2>Cập nhật trạng thái</h2>
-                    <form method="post" action="{% url 'rescue:case-update-status' case.pk %}">
-                        {% csrf_token %}
-                        {% for field in status_form %}
-                            <div class="field">
-                                {{ field.label_tag }}
-                                {{ field }}
-                            </div>
-                        {% endfor %}
-                        <button class="button button-primary button-block" type="submit">Lưu trạng thái</button>
-                    </form>
-                </section>
-
-                <section class="panel action-panel">
-                    <h2>Phân công cứu hộ</h2>
-                    <form method="post" action="{% url 'rescue:case-assign' case.pk %}">
-                        {% csrf_token %}
-                        {% for field in assignment_form %}
-                            <div class="field">
-                                {{ field.label_tag }}
-                                {{ field }}
-                            </div>
-                        {% endfor %}
-                        <button class="button button-dark button-block" type="submit">Phân công thành viên</button>
-                    </form>
-                </section>
-            {% endif %}
-
-            <section class="panel action-panel">
-                <h2>Đội cứu hộ</h2>
-                <ul class="assignment-list">
-                    {% for assignment in case.assignments.all %}
-                        <li>
-                            <span class="avatar">{{ assignment.assignee.full_name|default:assignment.assignee.email|slice:":1"|upper }}</span>
-                            <div>
-                                <strong>{{ assignment.assignee.full_name|default:assignment.assignee.email }}</strong>
-                                <small>{% if assignment.is_active %}Đang tham gia{% else %}Đã hoàn thành{% endif %}</small>
-                            </div>
-                        </li>
-                    {% empty %}
-                        <li class="muted">Chưa có thành viên được phân công.</li>
-                    {% endfor %}
-                </ul>
-            </section>
         </aside>
     </div>
 </section>
@@ -263,6 +255,6 @@
 {% block extra_scripts %}
 {% if map_latitude != None %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="{% static 'js/maps.js' %}"></script>
+<script src="{% static 'js/maps.js' %}?v=20261027-2"></script>
 {% endif %}
 {% endblock %}

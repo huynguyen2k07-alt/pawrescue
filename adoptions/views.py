@@ -10,8 +10,12 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from organizations.models import OrganizationMembership, RescueOrganization
-from rescue.models import Notification, RescueCase
+from organizations.permissions import (
+    MANAGER_ROLES,
+    can_manage_organization,
+    managed_organizations as _managed_organizations,
+)
+from rescue.models import Notification
 from rescue.notifications import create_notifications
 
 from .forms import (
@@ -35,44 +39,8 @@ from .models import (
 )
 
 
-MANAGER_ROLES = (
-    OrganizationMembership.Role.OWNER,
-    OrganizationMembership.Role.MANAGER,
-)
-
-
-def _managed_organizations(user):
-    if not user.is_authenticated:
-        return RescueOrganization.objects.none()
-    if user.is_superuser:
-        return RescueOrganization.objects.filter(
-            is_active=True,
-            is_verified=True,
-        )
-    return RescueOrganization.objects.filter(
-        memberships__user=user,
-        memberships__is_active=True,
-        memberships__role__in=MANAGER_ROLES,
-        is_active=True,
-        is_verified=True,
-        is_system=False,
-    ).distinct()
-
-
 def _can_manage_animal(user, animal):
-    if not user.is_authenticated:
-        return False
-    if user.is_superuser:
-        return True
-    return OrganizationMembership.objects.filter(
-        organization=animal.organization,
-        organization__is_active=True,
-        organization__is_verified=True,
-        organization__is_system=False,
-        user=user,
-        is_active=True,
-        role__in=MANAGER_ROLES,
-    ).exists()
+    return can_manage_organization(user, animal.organization)
 
 
 def _manager_ids(organization):

@@ -1,5 +1,6 @@
 import base64
 from tempfile import TemporaryDirectory
+from unittest import skip
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -28,6 +29,7 @@ PNG_1X1 = base64.b64decode(
 )
 
 
+@skip("Nhận nuôi đã được gỡ khỏi website; giữ lại các kiểm thử luồng cũ để tham khảo dữ liệu lưu trữ.")
 class AdoptionWorkflowTests(TestCase):
     def setUp(self):
         user_model = get_user_model()

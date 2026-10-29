@@ -3,7 +3,7 @@
 
 {% block title %}Hộp thư hỗ trợ · PawRescue{% endblock %}
 {% block bodyclass %}{{ block.super }} support-inbox-page{% endblock %}
-{% block extrahead %}{{ block.super }}<script defer src="{% static 'admin/js/support-inbox.js' %}"></script>{% endblock %}
+{% block extrahead %}{{ block.super }}<script defer src="{% static 'admin/js/support-inbox.js' %}?v=20261028-3"></script>{% endblock %}
 {% block nav-breadcrumbs %}
 <nav aria-label="Điều hướng"><div class="breadcrumbs"><a href="{% url 'admin:index' %}">Tổng quan</a> › Hộp thư hỗ trợ</div></nav>
 {% endblock %}
@@ -83,6 +83,7 @@
             {% if selected_conversation.status != 'closed' %}
                 <form class="support-admin-reply" method="post" enctype="multipart/form-data" action="{% url 'support:admin-reply' selected_conversation.pk %}" data-admin-reply-form>
                     {% csrf_token %}
+                    {% if context_case %}<input type="hidden" name="case" value="{{ context_case.pk }}">{% endif %}
                     <label for="id_support_reply">Trả lời với tư cách quản trị viên</label>
                     <textarea id="id_support_reply" name="body" rows="3" maxlength="2000" placeholder="Nhập câu trả lời hoặc gửi ảnh/video...">{{ draft_message }}</textarea>
                     <div class="support-admin-attachment-preview" data-admin-attachment-preview hidden></div>

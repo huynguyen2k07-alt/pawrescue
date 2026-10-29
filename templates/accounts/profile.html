@@ -30,15 +30,15 @@
 
         <dl class="profile-stats">
             <div><dt>{{ reported_count }}</dt><dd>Tin đã báo</dd></div>
-            <div><dt>{{ assignment_count }}</dt><dd>Ca đang tham gia</dd></div>
-            <div><dt>{{ organization_count }}</dt><dd>Tổ chức</dd></div>
+            {% if assignment_count %}<div><dt>{{ assignment_count }}</dt><dd>Ca đang tham gia</dd></div>{% endif %}
         </dl>
 
         <nav class="profile-quick-links" aria-label="Lối tắt tài khoản">
-            <a href="{% url 'rescue:my-cases' %}"><span aria-hidden="true">↗</span><strong>Ca cứu hộ của tôi</strong><small>Theo dõi các tin đã báo</small></a>
+            <a href="{% url 'rescue:my-cases' %}"><span aria-hidden="true">↗</span><strong>Tin báo của tôi</strong><small>Theo dõi các tin đã gửi</small></a>
+            {% if user.is_superuser %}<a href="{% url 'admin:rescue_rescuecase_changelist' %}"><span aria-hidden="true">↗</span><strong>Quản lý tin báo</strong><small>Kiểm tra, liên hệ và điều phối cứu hộ</small></a>{% elif rescue_has_workspace %}<a href="{% url 'collaborators:dashboard' %}"><span aria-hidden="true">↗</span><strong>Ca được giao</strong><small>Mở ca và cập nhật hiện trường</small></a>{% endif %}
             <a href="{% url 'rescue:notification-list' %}"><span aria-hidden="true">↗</span><strong>Thông báo</strong><small>{{ unread_notification_count }} cập nhật chưa đọc</small></a>
-            <a href="{% url 'adoptions:my-applications' %}"><span aria-hidden="true">↗</span><strong>Đơn nhận nuôi</strong><small>Xem tiến trình xét duyệt</small></a>
-            <a href="{% url 'donations:my-donations' %}"><span aria-hidden="true">↗</span><strong>Đóng góp của tôi</strong><small>Theo dõi xác nhận ủng hộ</small></a>
+            <a href="{% url 'rescue:case-create' %}"><span aria-hidden="true">↗</span><strong>Gửi tin báo mới</strong><small>Gửi thông tin và vị trí cho quản trị viên</small></a>
+            <a href="{% url 'rescue:case-map' %}"><span aria-hidden="true">↗</span><strong>Bản đồ cứu hộ</strong><small>Xem vị trí các ca cứu hộ</small></a>
         </nav>
     </div>
 </section>

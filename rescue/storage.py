@@ -6,7 +6,7 @@ from django.utils.deconstruct import deconstructible
 
 @deconstructible
 class PrivateRescueStorage(FileSystemStorage):
-    """Storage for field photos that must pass case visibility checks."""
+    """Kho ảnh hiện trường chỉ cho tải ảnh sau khi kiểm tra quyền xem ca."""
 
     def __init__(self):
         super().__init__(location=None, base_url=None)
@@ -26,6 +26,7 @@ class PrivateRescueStorage(FileSystemStorage):
             self.__dict__.pop("location", None)
 
     def url(self, name):
+        # Ảnh riêng tư phải được tải qua đường dẫn có kiểm tra quyền truy cập.
         raise ValueError("Private rescue files do not have a public URL.")
 
 

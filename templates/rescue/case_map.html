@@ -11,9 +11,9 @@
 <section class="section container map-page">
     <div class="section-heading map-page-heading">
         <div>
-            <span class="eyebrow eyebrow-dark">Theo dõi theo khu vực</span>
+            <span class="eyebrow eyebrow-dark">Vị trí hiện trường</span>
             <h1>Bản đồ cứu hộ Đà Nẵng</h1>
-            <p>Tìm các ca đang cần hỗ trợ trong phạm vi Đà Nẵng và ưu tiên những vị trí gần bạn.</p>
+            <p>Xem vị trí và địa chỉ của các ca đã được quản trị viên xác nhận tại Đà Nẵng.</p>
         </div>
         <a class="button button-accent" href="{% url 'rescue:case-create' %}">Báo ca mới</a>
     </div>
@@ -96,5 +96,5 @@
 
 {% block extra_scripts %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="{% static 'js/maps.js' %}"></script>
+<script src="{% static 'js/maps.js' %}?v=20261027-2"></script>
 {% endblock %}

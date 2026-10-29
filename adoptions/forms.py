@@ -2,7 +2,7 @@ from django import forms
 from django.core.validators import FileExtensionValidator
 from django.db.models import Q
 
-from organizations.models import OrganizationMembership, RescueOrganization
+from organizations.permissions import managed_organizations
 from rescue.models import RescueCase
 from rescue.uploads import sanitize_image_upload
 
@@ -12,12 +12,6 @@ from .models import (
     AdoptionFollowUp,
     AdoptionSafetyReport,
     AnimalProfile,
-)
-
-
-MANAGER_ROLES = (
-    OrganizationMembership.Role.OWNER,
-    OrganizationMembership.Role.MANAGER,
 )
 
 
@@ -108,22 +102,7 @@ class AnimalProfileForm(forms.ModelForm):
     def __init__(self, *args, user=None, require_images=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.require_images = require_images
-        if user is None or not user.is_authenticated:
-            organizations = RescueOrganization.objects.none()
-        elif user.is_superuser:
-            organizations = RescueOrganization.objects.filter(
-                is_active=True,
-                is_verified=True,
-            )
-        else:
-            organizations = RescueOrganization.objects.filter(
-                memberships__user=user,
-                memberships__is_active=True,
-                memberships__role__in=MANAGER_ROLES,
-                is_active=True,
-                is_verified=True,
-                is_system=False,
-            ).distinct()
+        organizations = managed_organizations(user)
         self.fields["organization"].queryset = organizations
 
         eligible_cases = RescueCase.objects.filter(

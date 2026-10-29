@@ -38,7 +38,19 @@ class SupportConversation(models.Model):
         null=True,
         blank=True,
         limit_choices_to=(
-            models.Q(is_superuser=True) | models.Q(role="collaborator")
+            models.Q(is_active=True)
+            & (
+                models.Q(is_superuser=True)
+                | models.Q(role="collaborator")
+                | models.Q(
+                    user_permissions__content_type__app_label="support",
+                    user_permissions__codename="handle_support",
+                )
+                | models.Q(
+                    groups__permissions__content_type__app_label="support",
+                    groups__permissions__codename="handle_support",
+                )
+            )
         ),
     )
     status = models.CharField(

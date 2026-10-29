@@ -43,7 +43,7 @@
                             </span>
                             <span class="notification-message">{{ notification.message }}</span>
                             <span class="notification-meta">
-                                {% if notification.rescue_case %}Ca #{{ notification.rescue_case_id }} · {{ notification.rescue_case.title }}{% elif notification.kind == 'donation_submitted' or notification.kind == 'donation_reviewed' %}Quỹ cứu hộ{% else %}Hồ sơ nhận nuôi{% endif %}
+                                {% if notification.rescue_case %}Ca #{{ notification.rescue_case_id }} · {{ notification.rescue_case.title }}{% elif notification.kind == 'donation_submitted' or notification.kind == 'donation_reviewed' %}Quỹ cứu hộ{% else %}Thông báo hệ thống{% endif %}
                                 {% if notification.actor %}
                                     · bởi {{ notification.actor.full_name|default:notification.actor.email }}
                                 {% endif %}

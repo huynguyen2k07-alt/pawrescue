@@ -2,9 +2,9 @@ from django.contrib.admin.widgets import AdminFileWidget
 
 
 class PrivateAdminFileWidget(AdminFileWidget):
-    """Upload widget that doesn't ask private storage for a public URL."""
+    """Ô tải tệp lên sử dụng đường dẫn có kiểm tra quyền cho chứng từ riêng tư."""
 
-    template_name = "django/forms/widgets/file.html"
+    template_name = "donations/widgets/private_admin_file.html"
 
     def is_initial(self, value):
         return bool(value and getattr(value, "name", ""))

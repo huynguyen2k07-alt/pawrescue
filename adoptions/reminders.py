@@ -15,7 +15,7 @@ FOLLOW_UP_MONTHS = (1, 2, 3)
 
 
 def add_months(value, months):
-    """Return the same day N months later, clamped to that month's last day."""
+    """Tính ngày sau số tháng yêu cầu; nếu vượt số ngày trong tháng thì lấy ngày cuối tháng."""
     target_index = value.month - 1 + months
     year = value.year + target_index // 12
     month = target_index % 12 + 1
@@ -24,7 +24,7 @@ def add_months(value, months):
 
 
 def ensure_follow_up_schedule(placement):
-    """Create the fixed 1/2/3-month check-in schedule for a placement."""
+    """Tạo lịch kiểm tra cố định sau 1, 2 và 3 tháng cho hồ sơ bàn giao nhận nuôi cũ."""
     placed_on = timezone.localtime(placement.placed_at).date()
     for milestone in FOLLOW_UP_MONTHS:
         due_on = add_months(placed_on, milestone)
@@ -50,7 +50,7 @@ def ensure_follow_up_schedule(placement):
 
 
 def dispatch_due_follow_up_reminders(today=None):
-    """Send each due in-app reminder once, safe for repeated scheduler runs."""
+    """Mỗi lời nhắc đến hạn chỉ được gửi một lần dù bộ lập lịch chạy lặp lại."""
     today = today or timezone.localdate()
     sent_count = 0
     due_ids = list(

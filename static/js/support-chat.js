@@ -102,10 +102,9 @@
         return article;
     }
 
+    // So sánh cả nội dung và tệp để nhận ra sửa tin nhắn dù mã tin nhắn không đổi.
     function renderMessages(items) {
-        const nextSignature = items
-            .map((item) => `${item.id}:${(item.attachments || []).map((file) => file.id).join("-")}`)
-            .join(",");
+        const nextSignature = JSON.stringify(items);
         if (nextSignature === messageSignature) return;
         messageSignature = nextSignature;
         messagesContainer.replaceChildren();

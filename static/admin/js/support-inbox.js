@@ -8,8 +8,10 @@
     const threadStatus = root.querySelector("[data-thread-status]");
     const replyForm = root.querySelector("[data-admin-reply-form]");
     const selectedId = Number(root.dataset.selectedId || 0);
+    const initiallyClosed = Boolean(threadStatus && !replyForm);
     let isLoading = false;
     let messageSignature = "";
+    let conversationSignature = "";
 
     function createEmptyList() {
         const wrapper = document.createElement("div");
@@ -48,6 +50,9 @@
     }
 
     function renderConversations(items) {
+        const nextSignature = JSON.stringify(items);
+        if (nextSignature === conversationSignature) return;
+        conversationSignature = nextSignature;
         const previousScroll = conversationList.scrollTop;
         const fragment = document.createDocumentFragment();
         if (!items.length) fragment.appendChild(createEmptyList());
@@ -116,7 +121,7 @@
 
     function renderMessages(items) {
         if (!messageList) return;
-        const nextSignature = items.map((item) => item.id).join(",");
+        const nextSignature = JSON.stringify(items);
         if (nextSignature === messageSignature) return;
         messageSignature = nextSignature;
         const fragment = document.createDocumentFragment();
@@ -134,6 +139,7 @@
         threadStatus.classList.add(`support-thread-status-${selected.status}`);
     }
 
+    // Đồng bộ hộp thư theo phân công và trạng thái mới để nhân sự thấy đúng cuộc trò chuyện được phép xử lý.
     async function refreshInbox() {
         if (isLoading || document.hidden) return;
         isLoading = true;
@@ -151,7 +157,18 @@
                 return;
             }
             renderConversations(data.conversations);
+            if (selectedId && (!data.selected || data.selected.id !== selectedId)) {
+                const nextConversation = data.conversations.find(
+                    (item) => item.id === data.selected?.id
+                );
+                window.location.assign(nextConversation?.url || window.location.pathname);
+                return;
+            }
             if (data.selected && data.selected.id === selectedId) {
+                if ((data.selected.status === "closed") !== initiallyClosed) {
+                    window.location.reload();
+                    return;
+                }
                 renderMessages(data.selected.messages);
                 updateStatus(data.selected);
             }

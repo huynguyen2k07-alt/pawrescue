@@ -1,1 +1,1 @@
-"""Custom management commands for PawRescue."""
+"""Các lệnh quản lý riêng của PawRescue."""

@@ -1,31 +1,12 @@
 from django import forms
 
-from organizations.models import OrganizationMembership, RescueOrganization
+from organizations.permissions import fundraising_organizations as _managed_organizations
 from rescue.models import RescueCase
 from rescue.uploads import sanitize_image_upload
 
 from .models import CampaignExpense, Donation, FundraisingCampaign
 from .uploads import sanitize_receipt_upload
-
-
-MANAGER_ROLES = (
-    OrganizationMembership.Role.OWNER,
-    OrganizationMembership.Role.MANAGER,
-)
-
-
-def _managed_organizations(user):
-    if user is None or not user.is_authenticated:
-        return RescueOrganization.objects.none()
-    if user.is_superuser:
-        return RescueOrganization.objects.filter(is_active=True)
-    return RescueOrganization.objects.filter(
-        memberships__user=user,
-        memberships__is_active=True,
-        memberships__role__in=MANAGER_ROLES,
-        is_verified=True,
-        is_active=True,
-    ).distinct()
+from .widgets import PrivateAdminFileWidget
 
 
 def _validate_upload_size(uploaded_file):
@@ -34,7 +15,7 @@ def _validate_upload_size(uploaded_file):
     return uploaded_file
 
 
-class FundraisingCampaignForm(forms.ModelForm):
+class BaseFundraisingCampaignForm(forms.ModelForm):
     class Meta:
         model = FundraisingCampaign
         fields = (
@@ -77,20 +58,13 @@ class FundraisingCampaignForm(forms.ModelForm):
             "ends_at": forms.DateInput(attrs={"type": "date"}),
         }
 
-    def __init__(self, *args, user=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        organizations = _managed_organizations(user)
-        self.fields["organization"].queryset = organizations
-        self.fields["rescue_case"].queryset = RescueCase.objects.filter(
-            organization__in=organizations
-        ).select_related("organization")
-        self.fields["rescue_case"].required = False
-
     def clean_cover_image(self):
+        if getattr(self.cleaned_data.get("cover_image"), "_committed", False):
+            return self.cleaned_data["cover_image"]
         uploaded_file = _validate_upload_size(
             self.cleaned_data.get("cover_image")
         )
-        return sanitize_image_upload(uploaded_file) if uploaded_file else None
+        return sanitize_image_upload(uploaded_file) if uploaded_file else uploaded_file
 
     def clean(self):
         cleaned_data = super().clean()
@@ -110,6 +84,22 @@ class FundraisingCampaignForm(forms.ModelForm):
         if starts_at and ends_at and ends_at < starts_at:
             self.add_error("ends_at", "Ngày kết thúc không thể trước ngày bắt đầu.")
         return cleaned_data
+
+
+class FundraisingCampaignForm(BaseFundraisingCampaignForm):
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        organizations = _managed_organizations(user)
+        self.fields["organization"].queryset = organizations
+        self.fields["rescue_case"].queryset = RescueCase.objects.filter(
+            organization__in=organizations
+        ).select_related("organization")
+        self.fields["rescue_case"].required = False
+
+
+class AdminFundraisingCampaignForm(BaseFundraisingCampaignForm):
+    class Meta(BaseFundraisingCampaignForm.Meta):
+        fields = "__all__"
 
 
 class DonationForm(forms.ModelForm):
@@ -151,8 +141,10 @@ class DonationForm(forms.ModelForm):
             self.initial.setdefault("donor_email", user.email)
 
     def clean_proof(self):
+        if getattr(self.cleaned_data.get("proof"), "_committed", False):
+            return self.cleaned_data["proof"]
         uploaded_file = _validate_upload_size(self.cleaned_data.get("proof"))
-        return sanitize_receipt_upload(uploaded_file) if uploaded_file else None
+        return sanitize_receipt_upload(uploaded_file) if uploaded_file else uploaded_file
 
 
 class CampaignExpenseForm(forms.ModelForm):
@@ -185,8 +177,10 @@ class CampaignExpenseForm(forms.ModelForm):
         }
 
     def clean_receipt(self):
+        if getattr(self.cleaned_data.get("receipt"), "_committed", False):
+            return self.cleaned_data["receipt"]
         uploaded_file = _validate_upload_size(self.cleaned_data.get("receipt"))
-        return sanitize_receipt_upload(uploaded_file) if uploaded_file else None
+        return sanitize_receipt_upload(uploaded_file) if uploaded_file else uploaded_file
 
 
 class DonationReviewForm(forms.Form):
@@ -196,3 +190,15 @@ class DonationReviewForm(forms.Form):
             (Donation.Status.REJECTED, "Đánh dấu không hợp lệ"),
         )
     )
+
+
+class AdminDonationForm(DonationForm):
+    class Meta(DonationForm.Meta):
+        fields = "__all__"
+        widgets = {**DonationForm.Meta.widgets, "proof": PrivateAdminFileWidget}
+
+
+class AdminCampaignExpenseForm(CampaignExpenseForm):
+    class Meta(CampaignExpenseForm.Meta):
+        fields = "__all__"
+        widgets = {**CampaignExpenseForm.Meta.widgets, "receipt": PrivateAdminFileWidget}

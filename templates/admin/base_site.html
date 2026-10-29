@@ -8,13 +8,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'admin/css/pawrescue_admin.css' %}">
+    <link rel="stylesheet" href="{% static 'admin/css/pawrescue_admin.css' %}?v=20261028-3">
 {% endblock %}
 
 {% block branding %}
-    <a class="paw-admin-brand" href="{% url 'admin:index' %}" aria-label="PawRescue Control Center">
+    <a class="paw-admin-brand" href="{% url 'admin:index' %}" aria-label="PawRescue · Quản trị">
         <span class="paw-admin-mark" aria-hidden="true">🐾</span>
-        <span><strong>PawRescue</strong><small>Control Center</small></span>
+        <span><strong>PawRescue</strong><small>Quản trị cứu hộ</small></span>
     </a>
 {% endblock %}
 
@@ -22,8 +22,7 @@
     {% if user.is_authenticated %}
         <nav class="paw-admin-global" aria-label="Liên kết nhanh">
             <a href="{% url 'support:inbox' %}">Hộp thư{% if support_admin_unread_count %} <span class="paw-nav-badge">{{ support_admin_unread_count }}</span>{% endif %}</a>
-            <a href="{% url 'adoptions:dashboard' %}">Quản lý nhận nuôi</a>
-            <a href="{% url 'rescue:notification-list' %}">Thông báo</a>
+            <a href="{% url 'admin:rescue_rescuecase_changelist' %}">Ca cứu hộ</a>
             <a class="paw-view-site" href="/">Xem website <span aria-hidden="true">↗</span></a>
         </nav>
     {% endif %}

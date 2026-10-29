@@ -3,8 +3,8 @@
 
 {% block title %}Hộp thư cộng tác viên · PawRescue{% endblock %}
 {% block extra_head %}
-    <link rel="stylesheet" href="{% static 'admin/css/pawrescue_admin.css' %}">
-    <link rel="stylesheet" href="{% static 'css/collaborator.css' %}">
+    <link rel="stylesheet" href="{% static 'admin/css/pawrescue_admin.css' %}?v=20261028-3">
+    <link rel="stylesheet" href="{% static 'css/collaborator.css' %}?v=20261028-3">
 {% endblock %}
 
 {% block content %}
@@ -61,6 +61,7 @@
                 </div>
                 {% if selected_conversation.status != 'closed' %}
                     <form class="support-admin-reply" method="post" enctype="multipart/form-data" action="{% url 'support:admin-reply' selected_conversation.pk %}" data-admin-reply-form>
+                        {% if context_case %}<input type="hidden" name="case" value="{{ context_case.pk }}">{% endif %}
                         {% csrf_token %}<label for="id_support_reply">Trả lời với tư cách đội hỗ trợ</label><textarea id="id_support_reply" name="body" rows="3" maxlength="2000" placeholder="Nhập câu trả lời hoặc gửi ảnh/video...">{{ draft_message }}</textarea>
                         <div class="support-admin-attachment-preview" data-admin-attachment-preview hidden></div>
                         <div><div class="support-admin-file-control"><input id="id_support_attachments" name="attachments" type="file" accept=".jpg,.jpeg,.png,.webp,.mp4,.webm,.mov" multiple data-admin-file-input><label for="id_support_attachments">＋ Thêm ảnh/video</label><small>Tối đa 4 tệp · Ảnh 8 MB · Video 40 MB</small></div><button type="submit">Gửi trả lời</button></div>
@@ -73,4 +74,4 @@
 </section>
 {% endblock %}
 
-{% block extra_scripts %}<script defer src="{% static 'admin/js/support-inbox.js' %}"></script>{% endblock %}
+{% block extra_scripts %}<script defer src="{% static 'admin/js/support-inbox.js' %}?v=20261028-3"></script>{% endblock %}

@@ -51,6 +51,8 @@ def reserve_system_organization(apps, schema_editor):
     OrganizationMembership.objects.filter(
         organization_id=system_organization.pk
     ).delete()
+    if schema_editor.connection.vendor == "postgresql":
+        schema_editor.execute("SET CONSTRAINTS ALL IMMEDIATE")
 
 
 def unreserve_system_organization(apps, schema_editor):
