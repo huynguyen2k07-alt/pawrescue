@@ -52,6 +52,7 @@ class AdminAndGuestJourneyTests(TestCase):
                 "address": "Hải Châu, Đà Nẵng",
                 "latitude": "16.054407",
                 "longitude": "108.202167",
+                "location_confirmed": "on",
                 "contact_name": self.guest.full_name,
                 "contact_phone": self.guest.phone,
             },

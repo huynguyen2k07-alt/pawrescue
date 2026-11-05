@@ -8,8 +8,22 @@ from .models import RescueCase
 
 
 def is_rescue_admin(user):
+    # ===== CHỨC NĂNG CHÍNH: PHÂN QUYỀN ĐIỀU PHỐI CỨU HỘ =====
     # Quyền điều hành cứu hộ chỉ dành cho tài khoản quản trị cao nhất đang hoạt động.
     return bool(user and user.is_authenticated and user.is_active and user.is_superuser)
+
+
+def is_rescue_moderator(user):
+    return bool(
+        user and user.is_authenticated and user.is_active
+        and user.role == user.Role.MODERATOR and not user.is_superuser
+    )
+
+
+def can_review_case(user, rescue_case):
+    return is_rescue_admin(user) or (
+        is_rescue_moderator(user) and is_case_assignee(user, rescue_case)
+    )
 
 
 def is_case_assignee(user, rescue_case):
@@ -44,4 +58,5 @@ def eligible_assignees():
     operator_ids = support_operator_queryset(user_model).values_list("pk", flat=True)
     return user_model.objects.filter(is_active=True).filter(
         Q(pk__in=operator_ids) | Q(pk__in=member_ids)
+        | Q(role=user_model.Role.MODERATOR)
     ).distinct().order_by("full_name", "email")

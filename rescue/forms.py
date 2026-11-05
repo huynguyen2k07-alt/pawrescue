@@ -36,6 +36,16 @@ class MultipleFileField(forms.FileField):
 
 
 class RescueCaseForm(forms.ModelForm):
+    location_confirmed = forms.BooleanField(
+        required=False,
+        label="Tôi đã kiểm tra ghim và địa chỉ đúng hiện trường",
+        error_messages={
+            "required": (
+                "Hãy kiểm tra ghim và địa chỉ rồi xác nhận đúng hiện trường "
+                "trước khi gửi tin báo."
+            ),
+        },
+    )
     images = MultipleFileField(
         required=False,
         label="Ảnh hiện trường",
@@ -50,10 +60,12 @@ class RescueCaseForm(forms.ModelForm):
         ),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, require_location_confirmation=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["latitude"].required = True
         self.fields["longitude"].required = True
+        # Người báo phải tự kiểm tra hiện trường; GPS gần đúng chưa đủ để điều phối cứu hộ.
+        self.fields["location_confirmed"].required = require_location_confirmation
 
     class Meta:
         model = RescueCase
@@ -112,6 +124,7 @@ class RescueCaseForm(forms.ModelForm):
         }
 
     def clean(self):
+        # ===== CHỨC NĂNG CHÍNH: KIỂM TRA VỊ TRÍ BÁO TIN =====
         # Tin báo phải có đủ tọa độ trong phạm vi Đà Nẵng để xác định đúng hiện trường.
         cleaned_data = super().clean()
         latitude = cleaned_data.get("latitude")
@@ -142,8 +155,9 @@ class CaseStatusUpdateForm(forms.Form):
         widget=forms.Textarea(attrs={"rows": 3}),
     )
 
-    def __init__(self, *args, current_status=None, **kwargs):
+    def __init__(self, *args, current_status=None, rescue_case=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.rescue_case = rescue_case
         self.fields["status"].choices = [
             choice
             for choice in RescueCase.Status.choices
@@ -151,18 +165,35 @@ class CaseStatusUpdateForm(forms.Form):
         ]
         self.fields["note"].label = "Đánh giá kết quả / ghi chú"
         self.fields["note"].help_text = (
-            "Bắt buộc ghi đánh giá kết quả trước khi xác nhận cứu thành công, đóng hoặc hủy ca."
+            "Bắt buộc ghi đánh giá khi báo hoàn thành, xác nhận cứu thành công, đóng hoặc hủy ca."
         )
 
     def clean(self):
-        # Bắt buộc ghi đánh giá trước khi xác nhận cứu thành công, đóng hoặc hủy ca.
+        # Báo hoàn thành cần đánh giá và vị trí hợp lệ; admin duyệt rồi ca mới được coi là thành công.
         cleaned_data = super().clean()
         if cleaned_data.get("status") in {
+            RescueCase.Status.PENDING_REVIEW,
             RescueCase.Status.RESCUED,
             RescueCase.Status.CLOSED,
             RescueCase.Status.CANCELLED,
         } and not cleaned_data.get("note", "").strip():
             self.add_error("note", "Hãy ghi đánh giá kết quả trước khi chốt ca.")
+        if (
+            cleaned_data.get("status") in {
+                RescueCase.Status.PENDING_REVIEW, RescueCase.Status.RESCUED,
+            }
+            and self.rescue_case is not None
+            and (
+                not self.rescue_case.address.strip()
+                or not is_within_da_nang(
+                    self.rescue_case.latitude, self.rescue_case.longitude
+                )
+            )
+        ):
+            self.add_error(
+                None,
+                "Hãy bổ sung địa chỉ và vị trí hợp lệ tại Đà Nẵng trước khi xác nhận thành công.",
+            )
         return cleaned_data
 
 

@@ -14,6 +14,7 @@ from .models import Donation, FundraisingCampaign
 @transaction.atomic
 def save_reviewed_donation(donation, *, reviewer, pending_only=False):
     """Lưu người duyệt và kết quả duyệt đóng góp nhất quán giữa các giao diện."""
+    # ===== CHỨC NĂNG CHÍNH: DUYỆT KHOẢN ĐÓNG GÓP =====
     # Mọi giao diện dùng chung giao dịch duyệt để nhất quán người duyệt, tổng quỹ và thông báo.
     campaign = FundraisingCampaign.objects.select_for_update().get(
         pk=donation.campaign_id

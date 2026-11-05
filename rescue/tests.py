@@ -14,6 +14,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from donations.models import FundraisingCampaign
 from organizations.models import OrganizationMembership, RescueOrganization
 from support.models import SupportConversation
 
@@ -76,20 +77,85 @@ class CommunityHomepageTests(TestCase):
             photo_source_url="https://example.com/contributor-photo",
         )
 
-    def test_homepage_focuses_on_reporting_and_tracking_requests(self):
+    def test_homepage_restores_community_content_and_keeps_reporting_links(self):
         response = self.client.get(reverse("rescue:case-list"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, self.article.title)
-        self.assertNotContains(response, self.contributor.name)
+        self.assertContains(response, self.article.title)
+        self.assertContains(response, self.contributor.name)
         self.assertNotContains(response, self.contributor.photo_source_url)
-        self.assertNotContains(response, "Gửi góp ý cho PawRescue")
-        self.assertContains(response, reverse("rescue:case-create"))
-        self.assertContains(response, reverse("rescue:case-map"))
-        self.assertNotContains(response, reverse("rescue:knowledge-list"))
-        self.assertNotContains(response, reverse("rescue:team"))
+        self.assertContains(response, "Gửi góp ý cho PawRescue")
+        for name in ("case-create", "case-map", "knowledge-list", "team"):
+            self.assertContains(response, f'href="{reverse(f"rescue:{name}")}"')
+        self.assertContains(response, f'href="{reverse("donations:campaign-list")}"')
         self.assertContains(response, 'aria-current="page"')
         self.assertContains(response, "report-cta-icon")
+
+    def test_public_community_sections_hide_unpublished_and_inactive_content(self):
+        draft = KnowledgeArticle.objects.create(
+            title="Bài viết chưa được công bố",
+            slug="bai-viet-chua-duoc-cong-bo-test",
+            category=KnowledgeArticle.Category.RESCUE,
+            excerpt="Nội dung bản nháp riêng.",
+            body="Nội dung này chưa dành cho người truy cập.",
+            is_published=False,
+        )
+        inactive = ContributorProfile.objects.create(
+            name="Cộng tác viên không còn hoạt động",
+            role="Hỗ trợ",
+            bio="Không xuất hiện ở nội dung công khai.",
+            is_active=False,
+        )
+
+        homepage = self.client.get(reverse("rescue:case-list"))
+        knowledge = self.client.get(reverse("rescue:knowledge-list"))
+        team = self.client.get(reverse("rescue:team"))
+
+        for response in (homepage, knowledge):
+            self.assertContains(response, self.article.title)
+            self.assertNotContains(response, draft.title)
+            self.assertNotContains(response, draft.excerpt)
+            self.assertNotContains(response, draft.get_absolute_url())
+        for response in (homepage, team):
+            self.assertContains(response, self.contributor.name)
+            self.assertNotContains(response, inactive.name)
+        self.assertEqual(self.client.get(draft.get_absolute_url()).status_code, 404)
+
+    def test_public_statistics_count_receipts_without_exposing_unverified_details(self):
+        RescueCase.objects.create(
+            title="Yêu cầu đã được xác nhận để thống kê",
+            description="Nội dung hiện trường không đưa vào biểu đồ.",
+            animal_type=RescueCase.AnimalType.CAT,
+            status=RescueCase.Status.VERIFIED,
+            address="Địa chỉ riêng không đưa vào biểu đồ",
+            is_location_private=True,
+        )
+        RescueCase.objects.create(
+            title="Yêu cầu chưa được xác minh không tính công khai",
+            description="Tin đang chờ quản trị viên kiểm tra.",
+            animal_type=RescueCase.AnimalType.DOG,
+            status=RescueCase.Status.REPORTED,
+            address="Điểm báo tin đang chờ xác minh",
+        )
+
+        response = self.client.get(reverse("rescue:case-list"))
+        statistics = response.context["public_statistics"]
+
+        self.assertContains(response, 'id="public-statistics"')
+        self.assertContains(response, 'src="data:image/png;base64,', count=2)
+        self.assertContains(response, 'class="public-statistics-table"', count=2)
+        self.assertEqual(statistics["total"], 2)
+        self.assertEqual(sum(row["count"] for row in statistics["status_rows"]), 2)
+        self.assertEqual(sum(row["count"] for row in statistics["daily_rows"]), 2)
+        self.assertNotContains(response, "Yêu cầu chưa được xác minh không tính công khai")
+        self.assertNotContains(response, "Điểm báo tin đang chờ xác minh")
+
+        self.client.force_login(self.superuser)
+        admin_statistics = self.client.get(reverse("rescue:case-list")).context[
+            "public_statistics"
+        ]
+        for key in ("total", "rescued_count", "status_rows", "daily_rows"):
+            self.assertEqual(admin_statistics[key], statistics[key])
 
     def test_homepage_uses_simple_status_tabs_and_rescue_archive(self):
         active_case = RescueCase.objects.create(
@@ -117,11 +183,12 @@ class CommunityHomepageTests(TestCase):
         response = self.client.get(reverse("rescue:case-list"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Đang cần cứu")
-        self.assertContains(response, "Đã xác nhận")
+        self.assertContains(response, "Chờ xác nhận")
+        self.assertContains(response, "Đã phê duyệt")
+        self.assertNotContains(response, "Đang cần cứu")
         self.assertContains(response, "Đã cứu thành công")
         self.assertContains(response, "Đã hủy")
-        self.assertNotContains(response, rescued_case.title)
+        self.assertContains(response, rescued_case.title)
         self.assertNotContains(response, 'id="id_status"')
         self.assertContains(response, '?status=verified#rescue-cases')
         self.assertContains(response, 'action="/#rescue-cases"')
@@ -211,16 +278,21 @@ class CommunityHomepageTests(TestCase):
         self.assertContains(detail_response, self.article.body)
         self.assertContains(detail_response, self.article.source_name)
 
-    def test_homepage_has_direct_reporting_and_map_links_without_extra_panels(self):
+    def test_homepage_restores_visual_sections_without_retired_adoption_links(self):
         response = self.client.get(reverse("rescue:case-list"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, f'href="{reverse("rescue:case-create")}"')
         self.assertContains(response, f'href="{reverse("rescue:case-map")}"')
-        self.assertNotContains(response, "watercolor-action-band")
-        self.assertNotContains(response, 'id="contributors"')
-        self.assertNotContains(response, 'id="knowledge"')
-        self.assertNotContains(response, 'id="feedback"')
+        self.assertContains(response, "hero-rescue-model")
+        self.assertContains(response, "watercolor-action-band")
+        self.assertContains(response, 'id="contributors"')
+        self.assertContains(response, 'id="knowledge"')
+        self.assertContains(response, 'id="feedback"')
+        self.assertContains(response, 'name="form_kind" value="community_feedback"')
+        self.assertContains(response, 'name="csrfmiddlewaretoken"')
+        for name in ("name", "email", "category", "message"):
+            self.assertContains(response, f'name="{name}"')
         self.assertNotContains(response, 'href="/adoptions/')
         self.assertNotContains(response, "Tìm chủ · Nhận nuôi")
 
@@ -258,6 +330,85 @@ class CommunityHomepageTests(TestCase):
             self.article.get_absolute_url(),
             reverse("rescue:knowledge-detail", args=(self.article.slug,)),
         )
+
+
+class PublicDonationFooterTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.organization = RescueOrganization.objects.create(
+            name="Đơn vị tiếp nhận đóng góp đã xác minh", is_verified=True,
+        )
+
+    def create_campaign(self, **changes):
+        fields = {
+            "organization": self.organization,
+            "title": "Quỹ hỗ trợ cứu hộ kiểm thử",
+            "description": "Thông tin góp quỹ công khai để kiểm thử chân trang.",
+            "target_amount": Decimal("1000000"),
+            "status": FundraisingCampaign.Status.ACTIVE,
+            "bank_name": "Ngân hàng kiểm thử",
+            "bank_account_name": "DON VI CUU HO KIEM THU",
+            "bank_account_number": "QA-BANK-VERIFIED-001",
+            "transfer_content": "QA ung ho cuu ho",
+        }
+        fields.update(changes)
+        return FundraisingCampaign.objects.create(**fields)
+
+    def test_footer_keeps_donation_link_without_fabricated_bank_information(self):
+        response = self.client.get(reverse("rescue:case-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context["footer_donation_campaign"])
+        self.assertContains(response, f'href="{reverse("donations:campaign-list")}"')
+        self.assertNotContains(response, 'href="/adoptions/')
+
+    def test_footer_shows_active_verified_campaign_and_bank_information(self):
+        campaign = self.create_campaign()
+
+        response = self.client.get(reverse("rescue:case-list"))
+
+        self.assertEqual(response.context["footer_donation_campaign"].pk, campaign.pk)
+        for text in (
+            campaign.title, campaign.bank_name, campaign.bank_account_name,
+            campaign.bank_account_number, campaign.transfer_content,
+        ):
+            self.assertContains(response, text)
+        self.assertContains(
+            response,
+            f'href="{reverse("donations:campaign-detail", args=(campaign.pk,))}"',
+        )
+
+    def test_footer_does_not_promote_ineligible_or_incomplete_bank_information(self):
+        eligible = self.create_campaign()
+        inactive = RescueOrganization.objects.create(
+            name="Đơn vị đã tạm dừng đóng góp", is_verified=True, is_active=False,
+        )
+        unverified = RescueOrganization.objects.create(
+            name="Đơn vị chưa được xác minh đóng góp", is_verified=False,
+        )
+        changes = (
+            {"status": FundraisingCampaign.Status.DRAFT},
+            {"status": FundraisingCampaign.Status.COMPLETED},
+            {"status": FundraisingCampaign.Status.CLOSED},
+            {"organization": inactive},
+            {"organization": unverified},
+            {"bank_account_name": ""},
+        )
+        hidden = [
+            self.create_campaign(
+                title=f"Quỹ không đủ điều kiện {index}",
+                bank_account_number=f"QA-HIDDEN-BANK-{index}",
+                **change,
+            )
+            for index, change in enumerate(changes)
+        ]
+
+        response = self.client.get(reverse("rescue:case-list"))
+
+        self.assertEqual(response.context["footer_donation_campaign"].pk, eligible.pk)
+        self.assertContains(response, eligible.bank_account_number)
+        for campaign in hidden:
+            self.assertNotContains(response, campaign.bank_account_number)
 
 
 class PublicContentSeedTests(TestCase):
@@ -664,7 +815,10 @@ class RescueCaseModelTests(TestCase):
             response,
             f'action="{reverse("rescue:case-assign", args=(self.rescue_case.pk,))}"',
         )
-        self.assertContains(response, "Hoàn tất / xử lý không thành")
+        self.assertContains(response, "Đóng hoặc hủy ca")
+        self.assertContains(response, "Xử lý thành công")
+        self.assertContains(response, 'id="case-complete"')
+        self.assertContains(response, 'id="id_complete_note"')
         self.assertContains(response, 'id="case-review"')
         self.assertContains(response, 'id="id_status_note"')
         self.assertContains(response, f'href="{change_url}?edit=1"')
@@ -677,6 +831,9 @@ class RescueCaseModelTests(TestCase):
         )
 
     def test_admin_changelist_lists_requests_and_tracks_rescue_results(self):
+        self.rescue_case.latitude = Decimal("16.054407")
+        self.rescue_case.longitude = Decimal("108.202167")
+        self.rescue_case.save(update_fields=("latitude", "longitude"))
         self.reporter.is_staff = True
         self.reporter.is_superuser = True
         self.reporter.save(update_fields=("is_staff", "is_superuser"))
@@ -749,7 +906,8 @@ class RescueCaseModelTests(TestCase):
         case_pk = self.rescue_case.pk
         case_title = self.rescue_case.title
 
-        public_response = self.client.get(reverse("rescue:case-list"))
+        pending_list_url = reverse("rescue:case-list") + "?status=reported"
+        public_response = self.client.get(pending_list_url)
         self.assertContains(public_response, case_title)
 
         delete_response = self.client.post(
@@ -763,7 +921,7 @@ class RescueCaseModelTests(TestCase):
         )
         self.assertFalse(RescueCase.objects.filter(pk=case_pk).exists())
         self.assertNotContains(
-            self.client.get(reverse("rescue:case-list")),
+            self.client.get(pending_list_url),
             case_title,
         )
 
@@ -945,6 +1103,7 @@ class RescueCaseViewTests(TestCase):
                 "address": "Hồ Thạc Gián, Thanh Khê, Đà Nẵng",
                 "latitude": "16.060500",
                 "longitude": "108.209800",
+                "location_confirmed": "on",
                 "contact_name": "Rescue Manager",
                 "contact_phone": "0900000000",
             },
@@ -974,8 +1133,9 @@ class RescueCaseViewTests(TestCase):
             update_fields=("latitude", "longitude", "is_location_private")
         )
         detail_url = reverse("rescue:case-detail", args=(self.rescue_case.pk,))
+        pending_list_url = reverse("rescue:case-list") + "?status=reported"
 
-        anonymous_list = self.client.get(reverse("rescue:case-list"))
+        anonymous_list = self.client.get(pending_list_url)
         anonymous_map = self.client.get(reverse("rescue:case-map"))
         self.assertNotContains(anonymous_list, self.rescue_case.title)
         self.assertEqual(self.client.get(detail_url).status_code, 404)
@@ -983,7 +1143,7 @@ class RescueCaseViewTests(TestCase):
 
         self.client.force_login(self.volunteer)
         self.assertNotContains(
-            self.client.get(reverse("rescue:case-list")),
+            self.client.get(pending_list_url),
             self.rescue_case.title,
         )
         self.assertEqual(self.client.get(detail_url).status_code, 404)
@@ -998,15 +1158,15 @@ class RescueCaseViewTests(TestCase):
         reporter_detail = self.client.get(detail_url)
         self.assertEqual(reporter_detail.status_code, 200)
         self.assertContains(
-            self.client.get(reverse("rescue:case-list")),
+            self.client.get(pending_list_url),
             self.rescue_case.title,
         )
         self.assertEqual(
-            self.client.get(reverse("rescue:case-map")).context["map_cases"][0][
-                "latitude"
-            ],
-            16.054407,
+            self.client.get(reverse("rescue:case-map")).context["map_cases"],
+            [],
         )
+        self.assertEqual(reporter_detail.context["map_latitude"], 16.054407)
+        self.assertEqual(reporter_detail.context["map_longitude"], 108.202167)
 
         collaborator = get_user_model().objects.create_user(
             email="triage-collaborator@example.com",
@@ -1245,7 +1405,7 @@ class RescueCaseViewTests(TestCase):
         self.rescue_case.latitude = Decimal("16.054407")
         self.rescue_case.longitude = Decimal("108.202167")
         self.rescue_case.is_location_private = True
-        self.rescue_case.status = RescueCase.Status.VERIFIED
+        self.rescue_case.status = RescueCase.Status.RESCUED
         self.rescue_case.save(
             update_fields=(
                 "latitude",
@@ -1269,12 +1429,14 @@ class RescueCaseViewTests(TestCase):
         self.rescue_case.latitude = Decimal("16.054407")
         self.rescue_case.longitude = Decimal("108.202167")
         self.rescue_case.is_location_private = True
+        self.rescue_case.status = RescueCase.Status.RESCUED
         self.rescue_case.save(
             update_fields=(
                 "reporter",
                 "latitude",
                 "longitude",
                 "is_location_private",
+                "status",
             )
         )
         self.client.force_login(self.manager)
@@ -1306,7 +1468,8 @@ class RescueCaseViewTests(TestCase):
     def test_case_outside_da_nang_is_not_shown_on_map(self):
         self.rescue_case.latitude = Decimal("10.776889")
         self.rescue_case.longitude = Decimal("106.700806")
-        self.rescue_case.save(update_fields=("latitude", "longitude"))
+        self.rescue_case.status = RescueCase.Status.RESCUED
+        self.rescue_case.save(update_fields=("latitude", "longitude", "status"))
 
         response = self.client.get(reverse("rescue:case-map"))
 
@@ -1374,7 +1537,7 @@ class RescueCaseViewTests(TestCase):
         self.assertContains(response, "notification-badge")
         self.assertEqual(response.context["unread_count"], 1)
 
-    def test_open_notification_marks_it_read_and_redirects_to_case(self):
+    def test_marking_notification_read_returns_to_the_notification_list(self):
         self.rescue_case.reporter = self.reporter
         self.rescue_case.save(update_fields=("reporter",))
         notification = Notification.objects.create(
@@ -1390,10 +1553,7 @@ class RescueCaseViewTests(TestCase):
             reverse("rescue:notification-open", args=(notification.pk,))
         )
 
-        self.assertRedirects(
-            response,
-            reverse("rescue:case-detail", args=(self.rescue_case.pk,)),
-        )
+        self.assertRedirects(response, reverse("rescue:notification-list"))
         notification.refresh_from_db()
         self.assertTrue(notification.is_read)
         self.assertIsNotNone(notification.read_at)

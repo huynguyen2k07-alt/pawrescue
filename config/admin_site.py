@@ -16,6 +16,11 @@ class RescueAdminSite(AdminSite):
     }
     app_order = ("rescue", "accounts", "organizations")
 
+    def has_permission(self, request):
+        if getattr(request.user, "is_moderator", False) and not request.user.is_superuser:
+            return False
+        return super().has_permission(request)
+
     def get_app_list(self, request, app_label=None):
         # Chỉ thu gọn các mục hiển thị; quyền và đường dẫn quản trị dữ liệu vẫn được giữ nguyên.
         app_list = super().get_app_list(request, app_label)

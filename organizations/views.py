@@ -22,11 +22,14 @@ ACTIVE_CASE_STATUSES = (
     RescueCase.Status.VERIFIED,
     RescueCase.Status.ASSIGNED,
     RescueCase.Status.IN_PROGRESS,
+    RescueCase.Status.PENDING_REVIEW,
 )
 
 
 def _active_membership(user, organization):
     if not user.is_authenticated:
+        return None
+    if getattr(user, "is_moderator", False) and not user.is_superuser:
         return None
     return OrganizationMembership.objects.filter(
         organization=organization,
@@ -62,6 +65,8 @@ def _owner_or_forbidden(user, organization):
 
 @login_required
 def dashboard(request):
+    if getattr(request.user, "is_moderator", False) and not request.user.is_superuser:
+        return HttpResponseForbidden("Quản trị viên cứu hộ chỉ xử lý các ca được admin giao.")
     memberships = OrganizationMembership.objects.filter(
         user=request.user,
         is_active=True,
@@ -127,6 +132,8 @@ def dashboard(request):
 
 @login_required
 def organization_create(request):
+    if getattr(request.user, "is_moderator", False) and not request.user.is_superuser:
+        return HttpResponseForbidden("Quản trị viên cứu hộ không có quyền tạo tổ chức.")
     if request.method == "POST":
         form = RescueOrganizationForm(request.POST)
         if form.is_valid():

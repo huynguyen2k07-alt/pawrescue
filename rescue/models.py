@@ -28,10 +28,11 @@ class RescueCase(models.Model):
         CRITICAL = "critical", "Rất khẩn cấp"
 
     class Status(models.TextChoices):
-        REPORTED = "reported", "Đã báo tin"
-        VERIFIED = "verified", "Đã xác nhận"
+        REPORTED = "reported", "Chờ xác nhận"
+        VERIFIED = "verified", "Đã phê duyệt"
         ASSIGNED = "assigned", "Đã phân công"
         IN_PROGRESS = "in_progress", "Đang cứu hộ"
+        PENDING_REVIEW = "pending_review", "Chờ admin duyệt kết quả"
         RESCUED = "rescued", "Đã cứu thành công"
         CLOSED = "closed", "Đã đóng"
         CANCELLED = "cancelled", "Đã hủy"
@@ -102,6 +103,7 @@ class RescueCase(models.Model):
         return f"#{self.pk} - {self.title}" if self.pk else self.title
 
     def change_status(self, new_status, changed_by=None, note=""):
+        # ===== CHỨC NĂNG CHÍNH: LƯU TRẠNG THÁI VÀ LỊCH SỬ CỨU HỘ =====
         # Lưu trạng thái, thời điểm chốt và lịch sử cùng nhau để hồ sơ cứu hộ luôn nhất quán.
         valid_statuses = {value for value, _label in self.Status.choices}
         if new_status not in valid_statuses:

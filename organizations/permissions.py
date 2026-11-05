@@ -10,6 +10,8 @@ MANAGER_ROLES = (
 def can_manage_organization(user, organization):
     if user is None or not user.is_authenticated:
         return False
+    if getattr(user, "is_moderator", False) and not user.is_superuser:
+        return False
     if user.is_superuser:
         return True
     if (
@@ -27,6 +29,8 @@ def can_manage_organization(user, organization):
 
 def fundraising_organizations(user):
     if user is None or not user.is_authenticated:
+        return RescueOrganization.objects.none()
+    if getattr(user, "is_moderator", False) and not user.is_superuser:
         return RescueOrganization.objects.none()
     organizations = RescueOrganization.objects.filter(is_active=True)
     if user.is_superuser:

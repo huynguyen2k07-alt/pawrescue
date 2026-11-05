@@ -92,6 +92,7 @@ def main():
             DEBUG=False,
             ALLOWED_HOSTS=["testserver", "127.0.0.1", "localhost"],
             SECURE_SSL_REDIRECT=False,
+            GEOAPIFY_API_KEY="",
             PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"],
             MEDIA_ROOT=root / "public",
             PRIVATE_RESCUE_MEDIA_ROOT=root / "rescue",

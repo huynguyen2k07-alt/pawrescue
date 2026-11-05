@@ -157,11 +157,15 @@ class AccountAdminWorkflowTests(TestCase):
 
     def test_delegated_editor_cannot_take_over_superuser_or_other_staff(self):
         other_staff = get_user_model().objects.create_user(email="other-staff@example.com", password="Old-password", full_name="Other staff", is_staff=True)
+        moderator = get_user_model().objects.create_user(email="protected-moderator@example.com", password="Old-password", role="moderator")
+        collaborator = get_user_model().objects.create_user(email="protected-collaborator@example.com", password="Old-password", role="collaborator")
         self.client.force_login(self.editor)
         response = self.client.get(reverse("admin:accounts_user_changelist"))
         self.assertNotContains(response, self.admin.email)
         self.assertNotContains(response, other_staff.email)
-        for target in (self.admin, self.other_admin, other_staff):
+        self.assertNotContains(response, moderator.email)
+        self.assertNotContains(response, collaborator.email)
+        for target in (self.admin, self.other_admin, other_staff, moderator, collaborator):
             with self.subTest(target=target.email):
                 response = self.client.post(reverse("admin:accounts_user_change", args=(target.pk,)), self.change_data(target, email="takeover@example.com"))
                 self.assertEqual(response.status_code, 302)
@@ -171,6 +175,38 @@ class AccountAdminWorkflowTests(TestCase):
                 self.assertEqual(response.status_code, 404)
                 target.refresh_from_db()
                 self.assertFalse(target.check_password("Takeover-password"))
+
+    def test_main_admin_can_create_moderator_but_delegated_editor_cannot(self):
+        for actor, expected_role in ((self.admin, "moderator"), (self.editor, "member")):
+            self.client.force_login(actor)
+            email = f"new-moderator-by-{actor.pk}@example.com"
+            response = self.client.post(reverse("admin:accounts_user_add"), {
+                "email": email, "full_name": "Quản trị viên mới", "role": "moderator",
+                "is_staff": "on" if actor == self.editor else "",
+                "is_superuser": "on" if actor == self.editor else "",
+                "is_active": "on", "password1": "Strong-test-password-26",
+                "password2": "Strong-test-password-26", "_save": "Save",
+            })
+            self.assertEqual(response.status_code, 302)
+            created = get_user_model().objects.get(email=email)
+            self.assertEqual(created.role, expected_role)
+            self.assertFalse(created.is_staff)
+            self.assertFalse(created.is_superuser)
+
+    def test_only_main_admin_can_grant_main_admin_privileges(self):
+        self.client.force_login(self.editor)
+        url = reverse("admin:accounts_user_change", args=(self.member.pk,))
+        response = self.client.post(url, self.change_data(self.member, is_staff="on", is_superuser="on"))
+        self.assertEqual(response.status_code, 302)
+        self.member.refresh_from_db()
+        self.assertFalse(self.member.is_superuser)
+        self.assertFalse(self.member.is_staff)
+        self.client.force_login(self.admin)
+        response = self.client.post(url, self.change_data(self.member, is_staff="on", is_superuser="on"))
+        self.assertEqual(response.status_code, 302)
+        self.member.refresh_from_db()
+        self.assertTrue(self.member.is_superuser)
+        self.assertTrue(self.member.is_staff)
 
     def test_delegated_group_editor_cannot_grant_group_permissions(self):
         group = Group.objects.create(name="Editors")

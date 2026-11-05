@@ -29,7 +29,7 @@
             {% for field in form %}<div class="field">{{ field.label_tag }}{{ field }}{% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}</div>{% endfor %}
             <button class="button button-primary" type="submit">Gửi tin nhắn</button>
         {% else %}
-            <p>Hãy phân công người phụ trách trong thông tin ca trước khi gửi tin nhắn.</p>
+            <p>Chưa có quản trị viên khác hoặc người được phân công đang hoạt động để nhận tin.</p>
         {% endif %}
     </form>
 </section>

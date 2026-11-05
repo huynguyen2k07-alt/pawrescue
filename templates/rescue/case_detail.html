@@ -4,7 +4,7 @@
 {% block title %}{{ case.title }} · PawRescue{% endblock %}
 
 {% block extra_head %}
-{% if map_latitude != None %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">{% endif %}
+{% if map_latitude != None %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -88,6 +88,7 @@
                             data-approximate="{% if map_is_approximate %}true{% else %}false{% endif %}"
                         ></div>
                         {% if map_is_approximate %}<p class="privacy-note">Vị trí đã được làm gần đúng để bảo vệ động vật và người báo tin.</p>{% endif %}
+                        {% if google_maps_url %}<p><a class="button button-ghost button-small" href="{{ google_maps_url }}" target="_blank" rel="noopener noreferrer">Mở vị trí trên Google Maps ↗</a></p>{% endif %}
                     </div>
                 {% endif %}
             </article>
@@ -133,6 +134,7 @@
             {% if can_manage %}
                 <section class="panel action-panel case-operations" aria-label="Xử lý tin báo">
                     <h2>Xử lý tin báo</h2>
+                    <p><strong>Admin chính</strong> · Điều phối và duyệt kết quả cuối cùng.</p>
                     {% for assignment in private_assignments %}{% if assignment.is_active %}<p class="case-current-handler">Người phụ trách: <strong>{{ assignment.assignee.full_name|default:assignment.assignee.email }}</strong></p>{% endif %}{% endfor %}
                     <div class="case-operation-list">
                         {% if case.reporter_id %}
@@ -140,7 +142,35 @@
                                 {% csrf_token %}<button class="button button-primary button-block" type="submit">Nhắn người báo tin</button>
                             </form>
                         {% endif %}
-                        {% if can_decide %}{# Chỉ quản trị viên phân công và ghi đánh giá trước khi chốt ca. #}
+                        {% if can_decide %}{# Admin chính duyệt kết quả trước khi công khai ca thành công lên bản đồ. #}
+                            {% if is_pending_review and completion_report %}
+                                <section class="case-operation case-operation-body case-review-report" id="case-pending-review" aria-label="Báo cáo chờ duyệt">
+                                    <h3>Quản trị viên báo đã hoàn thành</h3>
+                                    <p>{{ completion_report.note|linebreaksbr }}</p>
+                                    <small>{% if completion_report.changed_by %}{{ completion_report.changed_by.full_name|default:completion_report.changed_by.email }} · {% endif %}{{ completion_report.changed_at|date:"H:i, d/m/Y" }}</small>
+                                </section>
+                            {% endif %}
+                            <form class="case-admin-notify" method="post" action="{% url 'rescue:case-notify-admins' case.pk %}">
+                                {% csrf_token %}
+                                <button class="button button-ghost button-block" type="submit"{% if not admin_notification_count %} disabled{% endif %}>Gửi ca cho các quản trị viên</button>
+                                {% if admin_notification_count %}<small>Tự giao ca và gửi thông tin, địa điểm cùng liên kết hồ sơ cho {{ admin_notification_count }} quản trị viên. Nội dung đã gửi sẽ không bị gửi trùng.</small>{% else %}<small>Chưa có quản trị viên đang hoạt động để nhận ca.</small>{% endif %}
+                            </form>
+
+                            <form class="case-operation case-operation-body case-completion" id="case-complete" method="post" action="{% url 'rescue:case-update-status' case.pk %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="status" value="rescued">
+                                <h3>{% if is_pending_review %}Duyệt kết quả cứu hộ{% else %}Xác nhận cứu hộ thành công{% endif %}</h3>
+                                {{ completion_form.non_field_errors }}
+                                <p><strong>Địa chỉ xử lý:</strong> {{ case.address|default:"Chưa có địa chỉ" }}</p>
+                                <div class="field">{{ completion_form.note.label_tag }}{{ completion_form.note }}{% if completion_form.note.help_text %}<small>{{ completion_form.note.help_text }}</small>{% endif %}{{ completion_form.note.errors }}</div>
+                                {% if can_complete %}
+                                    <p class="privacy-note">Xác nhận sẽ lưu kết quả và hiển thị vị trí này trên bản đồ cứu hộ thành công.</p>
+                                {% else %}
+                                    <p class="privacy-note">Cần địa chỉ cụ thể và vị trí hợp lệ tại Đà Nẵng trước khi xác nhận. <a href="{% url 'admin:rescue_rescuecase_change' case.pk %}?edit=1">Bổ sung địa chỉ và vị trí</a>.</p>
+                                {% endif %}
+                                <button class="button button-primary button-block" type="submit"{% if not can_complete %} disabled{% endif %}>{% if is_pending_review %}Duyệt thành công và công khai{% else %}Xử lý thành công{% endif %}</button>
+                            </form>
+
                             {% if not case.organization_id %}
                                 <form method="post" action="{% url 'rescue:case-claim' case.pk %}">
                                     {% csrf_token %}<button class="button button-ghost button-block" type="submit">Xác nhận / tiếp nhận</button>
@@ -167,7 +197,7 @@
                             </details>
 
                             <details class="case-operation" id="case-review"{% if request.GET.review %} open{% endif %}>
-                                <summary>Hoàn tất / xử lý không thành</summary>
+                                <summary>Đóng hoặc hủy ca</summary>
                                 <form class="case-operation-body" method="post" action="{% url 'rescue:case-update-status' case.pk %}">
                                     {% csrf_token %}
                                     {{ status_form.non_field_errors }}
@@ -186,14 +216,52 @@
                                 </form>
                             </details>
                         {% endif %}
-                        {% if private_assignments %}<a class="button button-ghost button-block" href="{% url 'rescue:case-messages' case.pk %}">Trao đổi riêng với người xử lý</a>{% endif %}
+                        {% if private_assignments or has_case_messages or has_admin_recipients %}<a class="button button-ghost button-block" href="{% url 'rescue:case-messages' case.pk %}">Trao đổi điều phối</a>{% endif %}
+                    </div>
+                </section>
+            {% elif can_review %}
+                <section class="panel action-panel case-operations" id="moderator-actions" aria-label="Xử lý ca được giao">
+                    <h2>Ca được giao cho bạn</h2>
+                    <p><strong>Quản trị viên</strong> · Kiểm tra tin báo và gửi kết quả để admin chính duyệt.</p>
+                    <div class="case-operation-list">
+                        <a class="button button-ghost button-block" href="{% url 'rescue:case-messages' case.pk %}">Nhắn admin chính</a>
+                        {% if is_pending_review %}
+                            <div class="case-operation case-operation-body" id="case-pending-review">
+                                <strong>Đã báo hoàn thành · Chờ admin chính duyệt</strong>
+                                <p>Ca chỉ xuất hiện trên bản đồ công khai sau khi admin chính xác nhận thành công.</p>
+                            </div>
+                        {% elif can_moderate %}{# Quản trị viên chỉ xử lý ca được giao; admin chính giữ quyền công khai kết quả. #}
+                            {% if case.status == 'reported' or case.status == 'assigned' %}
+                                <form method="post" action="{% url 'rescue:case-update-status' case.pk %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="status" value="verified">
+                                    <input type="hidden" name="note" value="Quản trị viên đã kiểm tra và xác nhận thông tin tin báo.">
+                                    <button class="button button-ghost button-block" type="submit">Xác nhận thông tin</button>
+                                </form>
+                            {% endif %}
+                            <form class="case-operation case-operation-body case-completion" id="moderator-complete" method="post" action="{% url 'rescue:case-update-status' case.pk %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="status" value="pending_review">
+                                <h3>Báo đã hoàn thành</h3>
+                                {{ completion_form.non_field_errors }}
+                                <p><strong>Địa chỉ xử lý:</strong> {{ case.address }}</p>
+                                <div class="field">{{ completion_form.note.label_tag }}{{ completion_form.note }}{% if completion_form.note.help_text %}<small>{{ completion_form.note.help_text }}</small>{% endif %}{{ completion_form.note.errors }}</div>
+                                {% if can_report_completion %}
+                                    <p class="privacy-note">Kết quả và vị trí này sẽ được gửi cho admin chính duyệt trước khi hiển thị trên bản đồ.</p>
+                                {% else %}
+                                    <p class="privacy-note">Cần xác nhận thông tin và có địa chỉ, tọa độ hợp lệ tại Đà Nẵng. Nhắn admin chính nếu cần sửa vị trí.</p>
+                                {% endif %}
+                                <button class="button button-primary button-block" type="submit"{% if not can_report_completion %} disabled{% endif %}>Báo đã hoàn thành</button>
+                            </form>
+                            <a class="button button-ghost button-block danger-link" href="{% url 'rescue:case-reject' case.pk %}">Từ chối và xóa tin báo</a>
+                        {% endif %}
                     </div>
                 </section>
             {% elif can_coordinate %}
                 <section class="panel action-panel case-member-status">
                     <h2>Ca được giao cho bạn</h2>
-                    <p>Xem vị trí, cập nhật tình hình và báo kết quả cho admin.</p>
-                    <a class="button button-primary button-block" href="{% url 'rescue:case-messages' case.pk %}">Nhắn admin</a>
+                    <p>Xem vị trí, cập nhật tình hình và báo kết quả cho admin chính.</p>
+                    <a class="button button-primary button-block" href="{% url 'rescue:case-messages' case.pk %}">Nhắn admin chính</a>
                 </section>
             {% elif user.is_authenticated and case.reporter_id == user.pk %}
                 <section class="panel action-panel case-member-status">
@@ -209,6 +277,10 @@
                     <h2>Ca đã được chốt sổ</h2>
                     <strong>{{ case.get_status_display }}</strong>
                     {% if case.closed_at %}<p>{{ case.closed_at|date:"H:i, d/m/Y" }}</p>{% endif %}
+                    {% if case.status == 'rescued' %}
+                        {% if not case.is_location_private or can_view_location %}<p><strong>Địa chỉ đã xử lý:</strong> {{ case.address }}</p>{% endif %}
+                        <p><a href="{% url 'rescue:case-map' %}">Xem trên bản đồ cứu hộ thành công →</a></p>
+                    {% endif %}
                     <a href="?history=1#case-history">Xem đánh giá trong lịch sử</a>
                 </section>
             {% endif %}
@@ -254,7 +326,7 @@
 
 {% block extra_scripts %}
 {% if map_latitude != None %}
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="{% static 'js/maps.js' %}?v=20261027-2"></script>
+<script defer src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
+<script defer src="{% static 'js/maps.js' %}?v=20261102-6"></script>
 {% endif %}
 {% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Từ chối tin báo · PawRescue{% endblock %}
+
+{% block content %}
+<section class="section container case-reject-page">
+    <a class="back-link" href="{% url 'rescue:case-detail' case.pk %}">← Quay lại tin báo</a>
+    <div class="panel detail-panel">
+        <span class="eyebrow eyebrow-dark">Quản trị viên · Ca được giao</span>
+        <h1>Từ chối và xóa tin báo</h1>
+        <p><strong>#{{ case.pk }} · {{ case.title }}</strong></p>
+        <p>Chỉ xác nhận khi tin báo không hợp lệ hoặc không thể tiếp nhận. Tin báo sẽ bị xóa khỏi website và admin chính được thông báo lý do.</p>
+        <form class="case-operation-body" method="post" action="{% url 'rescue:case-reject' case.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="confirm" value="yes">
+            <div class="field">
+                <label for="case-reject-reason">Lý do từ chối <span aria-hidden="true">*</span></label>
+                <textarea id="case-reject-reason" name="reason" rows="4" maxlength="2000" required{% if reason_error %} aria-invalid="true" aria-describedby="case-reject-error"{% endif %}>{{ reason }}</textarea>
+                {% if reason_error %}<p id="case-reject-error" class="errornote" role="alert">{{ reason_error }}</p>{% endif %}
+            </div>
+            <button class="button button-danger" type="submit">Xác nhận từ chối và xóa tin báo</button>
+            <a class="button button-ghost" href="{% url 'rescue:case-detail' case.pk %}">Giữ tin báo và quay lại</a>
+        </form>
+    </div>
+</section>
+{% endblock %}

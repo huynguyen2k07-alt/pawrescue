@@ -1,0 +1,7 @@
+<div data-live-notifications
+     data-state-url="{% url 'rescue:notification-state' %}"
+     data-list-url="{% url 'rescue:notification-list' %}"
+     data-user-id="{{ user.pk }}"
+     data-latest-id="{{ latest_notification_id|default:0 }}">
+    <div class="live-notification-toasts" data-notification-toasts role="region" aria-label="Thông báo mới" aria-live="polite" aria-relevant="additions"></div>
+</div>

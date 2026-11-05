@@ -1,0 +1,48 @@
+<section class="public-statistics section container" id="public-statistics" aria-labelledby="public-statistics-title" data-public-statistics data-url="{% url 'rescue:public-statistics-live' %}" data-version="{{ public_statistics.version }}" data-time-zone="{{ public_statistics.time_zone }}" data-poll-interval="5000" data-checked-at="{{ public_statistics.checked_at }}">
+    <div class="section-heading home-section-heading">
+        <div>
+            <span class="eyebrow eyebrow-dark">Hành trình bằng những con số</span>
+            <h2 id="public-statistics-title">Cộng đồng cùng tạo thay đổi</h2>
+        </div>
+        <p>Đã xác nhận nghĩa là đã nhận request, chưa chốt kết quả. Chỉ thống kê số lượng.</p>
+    </div>
+    <div class="public-statistics-live">
+        <div class="public-statistics-live-info">
+            <p>Tự cập nhật mỗi 5 giây khi bạn đang xem trang.</p>
+            <p>Lần kiểm tra gần nhất: <time data-statistics-checked-at datetime="{{ public_statistics.checked_at }}">Vừa tải trang</time></p>
+            <p class="public-statistics-live-status" data-statistics-status data-state="ready" role="status" aria-live="polite">Dữ liệu mới nhất khi tải trang.</p>
+        </div>
+        <button class="button button-ghost button-small" type="button" data-statistics-refresh>Cập nhật ngay</button>
+    </div>
+    <dl class="public-statistics-summary">
+        <div><dt data-statistics-total>{{ public_statistics.total }}</dt><dd>Request đã tiếp nhận</dd></div>
+        <div><dt data-statistics-rescued>{{ public_statistics.rescued_count }}</dt><dd>Ca đã cứu thành công</dd></div>
+        <div><dt data-statistics-average>{{ public_statistics.daily_average|floatformat:2 }}</dt><dd>Yêu cầu/ngày trong 7 ngày qua</dd></div>
+    </dl>
+    <div class="public-statistics-grid">
+        <figure class="public-statistics-card">
+            <figcaption><h3>Tình hình xử lý cứu hộ</h3></figcaption>
+            <img data-statistics-status-chart src="{{ public_statistics.status_chart }}" alt="Biểu đồ số yêu cầu theo trạng thái xử lý. Bảng số liệu chi tiết ở ngay bên dưới." width="936" height="494" loading="lazy">
+            <details class="public-statistics-data">
+                <summary>Xem số liệu theo trạng thái</summary>
+                <table class="public-statistics-table">
+                    <caption>Ba nhóm kết quả xử lý</caption>
+                    <thead><tr><th scope="col">Trạng thái</th><th scope="col">Số yêu cầu</th></tr></thead>
+                    <tbody data-statistics-status-rows>{% for row in public_statistics.status_rows %}<tr><th scope="row">{{ row.label }}</th><td>{{ row.count }}</td></tr>{% endfor %}</tbody>
+                </table>
+            </details>
+        </figure>
+        <figure class="public-statistics-card">
+            <figcaption><h3>Request trong 7 ngày</h3><p><span data-statistics-window>{{ public_statistics.window_label }}</span></p></figcaption>
+            <img data-statistics-daily-chart src="{{ public_statistics.daily_chart }}" alt="Biểu đồ số request tiếp nhận theo ngày trong 7 ngày gần nhất. Bảng số liệu chi tiết ở ngay bên dưới." width="936" height="494" loading="lazy">
+            <details class="public-statistics-data">
+                <summary>Xem số liệu từng ngày</summary>
+                <table class="public-statistics-table">
+                    <caption>Số request tiếp nhận theo ngày</caption>
+                    <thead><tr><th scope="col">Ngày gửi</th><th scope="col">Số yêu cầu</th></tr></thead>
+                    <tbody data-statistics-daily-rows>{% for row in public_statistics.daily_rows %}<tr><th scope="row">{{ row.date|date:"d/m/Y" }}</th><td>{{ row.count }}</td></tr>{% endfor %}</tbody>
+                </table>
+            </details>
+        </figure>
+    </div>
+</section>

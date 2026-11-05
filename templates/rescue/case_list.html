@@ -1,22 +1,112 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Tin cứu hộ · PawRescue{% endblock %}
 
 {% block content %}
-<section class="section container">
-    <div class="panel detail-panel">
-        <span class="eyebrow eyebrow-dark">Báo tin và kết nối cứu hộ</span>
-        <h1>Gửi yêu cầu cứu hộ</h1>
-        <p>Mô tả tình trạng, nhập địa chỉ và ghim vị trí. Quản trị viên sẽ tiếp nhận, liên hệ và chuyển đơn vị xử lý.</p>
-        <div class="form-actions">
-            <a class="button button-primary" href="{% url 'rescue:case-create' %}">Gửi yêu cầu cứu hộ</a>
-            {% if user.is_authenticated %}<a class="button button-ghost" href="{% url 'rescue:my-cases' %}">Theo dõi tin của tôi</a>{% endif %}
-            <a class="button button-ghost" href="{% url 'rescue:case-map' %}">Xem bản đồ</a>
+<section class="hero-panel">
+    <div class="container hero-grid">
+        <div class="hero-copy">
+            <span class="eyebrow">Mạng lưới cứu hộ cộng đồng</span>
+            <h1>Một tin báo đúng lúc có thể cứu một sinh mạng.</h1>
+            <p>Gửi thông tin hiện trường để quản trị viên xác minh, liên hệ và chuyển đơn vị cứu hộ. Bạn có thể theo dõi kết quả ngay trên hồ sơ của mình.</p>
+            <div class="hero-actions">
+                <a class="button button-accent" href="{% url 'rescue:case-create' %}">Gửi yêu cầu cứu hộ</a>
+                <a class="button button-light" href="{% url 'rescue:case-map' %}">Xem bản đồ cứu hộ</a>
+                {% if user.is_authenticated %}
+                    <a class="hero-text-link" href="{% url 'rescue:my-cases' %}">Theo dõi tin của tôi →</a>
+                {% else %}
+                    <a class="hero-text-link" href="{% url 'accounts:register' %}">Tham gia cộng đồng →</a>
+                {% endif %}
+            </div>
+            <ul class="hero-promises" aria-label="Quy trình PawRescue">
+                <li><span>01</span>Báo tin nhanh</li>
+                <li><span>02</span>Quản trị viên xác minh</li>
+                <li><span>03</span>Theo dõi minh bạch</li>
+            </ul>
         </div>
-        <p class="privacy-note">Gửi tin báo → Quản trị viên xác nhận và điều phối → Theo dõi kết quả.</p>
+        <div class="hero-visual" data-parallax-layer>
+            <div class="hero-rescue-float">
+                <div class="hero-rescue-model" data-motion-tilt data-tilt-strength="3">
+                    <div class="hero-rescue-heading">
+                        <span class="hero-rescue-heading-icon" aria-hidden="true">
+                            <svg viewBox="0 0 32 32"><circle cx="9" cy="9" r="4"/><circle cx="23" cy="9" r="4"/><circle cx="5.5" cy="18" r="3.5"/><circle cx="26.5" cy="18" r="3.5"/><path d="M16 13c-5.2 0-9 5.1-7.4 9.5 1.2 3.2 4.3 2.7 7.4 1.6 3.1 1.1 6.2 1.6 7.4-1.6C25 18.1 21.2 13 16 13Z"/></svg>
+                        </span>
+                        <span><small>Mạng lưới tại Đà Nẵng</small><strong>Bản đồ cứu hộ trực tuyến</strong></span>
+                        <span class="hero-rescue-live"><i aria-hidden="true"></i> Cùng hành động</span>
+                    </div>
+
+                    <div class="hero-rescue-map" aria-hidden="true">
+                        <span class="hero-map-zone hero-map-zone-one"></span>
+                        <span class="hero-map-zone hero-map-zone-two"></span>
+                        <svg class="hero-map-route" viewBox="0 0 420 210" preserveAspectRatio="none">
+                            <path d="M55 155 C105 122, 126 150, 173 110 S265 72, 356 52"/>
+                        </svg>
+                        <span class="hero-map-paw hero-map-paw-one">●</span>
+                        <span class="hero-map-paw hero-map-paw-two">●</span>
+                        <span class="hero-map-paw hero-map-paw-three">●</span>
+                        <span class="hero-map-pin hero-map-pin-report"><i>!</i><b>Tin báo mới</b></span>
+                        <span class="hero-map-pin hero-map-pin-team"><i>＋</i><b>Đội hỗ trợ</b></span>
+                        <span class="hero-map-pet-card">
+                            <svg viewBox="0 0 32 32"><circle cx="9" cy="9" r="4"/><circle cx="23" cy="9" r="4"/><circle cx="5.5" cy="18" r="3.5"/><circle cx="26.5" cy="18" r="3.5"/><path d="M16 13c-5.2 0-9 5.1-7.4 9.5 1.2 3.2 4.3 2.7 7.4 1.6 3.1 1.1 6.2 1.6 7.4-1.6C25 18.1 21.2 13 16 13Z"/></svg>
+                            <span><strong>Kết nối để cứu hộ</strong><small>Báo tin · Xác minh · Điều phối</small></span>
+                        </span>
+                    </div>
+
+                    <dl class="hero-rescue-stats" aria-label="Thống kê cứu hộ">
+                        <div>
+                            <dt>{{ summary.active }}</dt>
+                            <dd>Ca đang xử lý</dd>
+                        </div>
+                        <div>
+                            <dt>{{ summary.critical }}</dt>
+                            <dd>Ca rất khẩn cấp</dd>
+                        </div>
+                        <div>
+                            <dt>{{ summary.rescued }}</dt>
+                            <dd>Đã cứu thành công</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
-{% if feedback_form.errors %}<div class="container messages"><div class="message message-error">{{ feedback_form.errors }}</div></div>{% endif %}
+
+<section class="watercolor-action-band" aria-labelledby="action-band-title">
+    <div class="container">
+        <div class="watercolor-action-heading">
+            <div>
+                <span class="eyebrow eyebrow-dark">Bạn có thể bắt đầu từ đây</span>
+                <h2 id="action-band-title">Mỗi lựa chọn là một cách trao cơ hội.</h2>
+            </div>
+            <p>Báo tin kịp thời, theo dõi vị trí và tìm hiểu cách hỗ trợ an toàn trước khi đội cứu hộ tiếp nhận.</p>
+        </div>
+        <div class="watercolor-action-scene" data-watercolor-scene>
+            <img src="{% static 'images/brand/pawrescue-watercolor-actions.png' %}" alt="" loading="eager">
+        </div>
+        <nav class="watercolor-action-links" aria-label="Ba cách đồng hành cùng PawRescue">
+            <a class="watercolor-action" href="{% url 'rescue:case-create' %}">
+                <span class="watercolor-action-number" aria-hidden="true">01</span>
+                <span class="watercolor-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/><path d="M12 8v6M9 11h6"/></svg></span>
+                <span class="watercolor-action-copy"><strong>Gửi tin cứu hộ</strong><small>Mô tả hiện trường để quản trị viên tiếp nhận.</small></span>
+                <span class="watercolor-action-arrow" aria-hidden="true">→</span>
+            </a>
+            <a class="watercolor-action" href="{% url 'rescue:case-map' %}">
+                <span class="watercolor-action-number" aria-hidden="true">02</span>
+                <span class="watercolor-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 11 9-7 9 7v9h-6v-6H9v6H3Z"/><circle cx="8" cy="10" r="1.4"/><circle cx="16" cy="10" r="1.4"/></svg></span>
+                <span class="watercolor-action-copy"><strong>Bản đồ cứu hộ</strong><small>Xác định vị trí và theo dõi các tin báo công khai.</small></span>
+                <span class="watercolor-action-arrow" aria-hidden="true">→</span>
+            </a>
+            <a class="watercolor-action" href="#knowledge">
+                <span class="watercolor-action-number" aria-hidden="true">03</span>
+                <span class="watercolor-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a7 7 0 1 0 7 7c0-2.2-1-4.2-2.5-5.5"/><path d="M12 7v6M9 10h6M18 3v4M16 5h4"/></svg></span>
+                <span class="watercolor-action-copy"><strong>Kiến thức cứu hộ</strong><small>Đọc hướng dẫn để biết cách giúp đỡ an toàn.</small></span>
+                <span class="watercolor-action-arrow" aria-hidden="true">→</span>
+            </a>
+        </nav>
+    </div>
+</section>
 
 <section class="section container" id="rescue-cases">
     <div class="section-heading">
@@ -28,13 +118,10 @@
     </div>
 
     <nav class="case-status-tabs" aria-label="Lọc ca cứu hộ theo trạng thái">
-        <a class="{% if not selected_status %}is-active{% endif %}" href="{% querystring status=None page=None %}#rescue-cases" {% if not selected_status %}aria-current="page"{% endif %}>
-            <span>Đang cần cứu</span><strong>{{ summary.active }}</strong>
-        </a>
         {% for value, label in status_choices %}
             <a class="{% if selected_status == value %}is-active{% endif %}" href="{% querystring status=value page=None %}#rescue-cases" {% if selected_status == value %}aria-current="page"{% endif %}>
                 <span>{{ label }}</span>
-                <strong>{% if value == 'verified' %}{{ summary.verified }}{% elif value == 'rescued' %}{{ summary.rescued }}{% else %}{{ summary.cancelled }}{% endif %}</strong>
+                <strong>{% if value == 'reported' %}{{ summary.reported }}{% elif value == 'verified' %}{{ summary.verified }}{% elif value == 'rescued' %}{{ summary.rescued }}{% else %}{{ summary.cancelled }}{% endif %}</strong>
             </a>
         {% endfor %}
     </nav>
@@ -55,7 +142,7 @@
             </select>
         </div>
         <button class="button button-dark" type="submit">Lọc kết quả</button>
-        {% if query or selected_status or selected_animal_type %}
+        {% if query or selected_animal_type or selected_status != 'verified' %}
             <a class="clear-filter" href="{% url 'rescue:case-list' %}#rescue-cases">Xóa bộ lọc</a>
         {% endif %}
     </form>
@@ -87,4 +174,163 @@
         </div>
     {% endif %}
 </section>
+
+{% if selected_status != 'rescued' %}
+<section class="rescue-success-section">
+    <div class="container">
+        <div class="rescue-success-heading">
+            <div>
+                <span class="eyebrow eyebrow-dark">Kết quả được lưu lại</span>
+                <h2>Đã giải cứu thành công</h2>
+                <p>Mỗi hồ sơ hoàn tất là một hành trình được cộng đồng và đội cứu hộ cùng ghi nhận.</p>
+            </div>
+            <div class="rescue-success-total" aria-label="Tổng số ca đã cứu thành công">
+                <strong>{{ summary.rescued }}</strong>
+                <span>ca đã được cứu</span>
+            </div>
+        </div>
+
+        {% if rescued_cases %}
+            <div class="case-grid rescue-success-grid">
+                {% for case in rescued_cases %}
+                    {% include "rescue/_case_card.html" with case=case %}
+                {% endfor %}
+            </div>
+            <div class="home-section-action">
+                <a class="button button-primary" href="{% url 'rescue:case-list' %}?status=rescued">Xem tất cả ca đã cứu thành công</a>
+            </div>
+        {% else %}
+            <div class="empty-state rescue-success-empty">
+                <span aria-hidden="true">✓</span>
+                <h3>Chưa có hồ sơ hoàn tất</h3>
+                <p>Ca đầu tiên được đánh dấu cứu thành công sẽ xuất hiện tại đây.</p>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{% include "rescue/_public_statistics.html" %}
+
+<section class="home-knowledge" id="knowledge">
+    <div class="container">
+        <div class="section-heading home-section-heading">
+            <div>
+                <span class="eyebrow eyebrow-dark">Cẩm nang cộng đồng</span>
+                <h2>Biết đúng để giúp đúng</h2>
+            </div>
+            <p>Hướng dẫn ngắn, có nguồn tham khảo rõ ràng để bạn bình tĩnh xử lý những phút đầu tiên.</p>
+        </div>
+        <div class="knowledge-card-grid">
+            {% for article in knowledge_articles %}
+                <article class="knowledge-card{% if forloop.first %} knowledge-card-featured{% endif %}">
+                    <a class="knowledge-card-media" href="{{ article.get_absolute_url }}" aria-label="Đọc {{ article.title }}">
+                        {% if article.cover_image %}
+                            <img src="{{ article.cover_image.url }}" alt="" loading="lazy">
+                        {% elif article.static_image_path %}
+                            <img src="{% static article.static_image_path %}" alt="" loading="lazy">
+                        {% endif %}
+                    </a>
+                    <div class="knowledge-card-body">
+                        <span class="knowledge-category">{{ article.get_category_display }}</span>
+                        <h3><a href="{{ article.get_absolute_url }}">{{ article.title }}</a></h3>
+                        <p>{{ article.excerpt }}</p>
+                        <div class="knowledge-card-footer">
+                            <span>{{ article.published_at|date:"d/m/Y" }}</span>
+                            <a href="{{ article.get_absolute_url }}">Đọc hướng dẫn <span aria-hidden="true">→</span></a>
+                        </div>
+                    </div>
+                </article>
+            {% empty %}
+                <div class="empty-state"><h3>Nội dung đang được chuẩn bị</h3><p>Hãy quay lại sau để xem cẩm nang mới.</p></div>
+            {% endfor %}
+        </div>
+        <div class="home-section-action"><a class="button button-light" href="{% url 'rescue:knowledge-list' %}">Xem toàn bộ cẩm nang</a></div>
+    </div>
+</section>
+
+<section class="section container contributors-section" id="contributors">
+    <div class="section-heading home-section-heading">
+        <div>
+            <span class="eyebrow eyebrow-dark">Những bàn tay cùng góp sức</span>
+            <h2>Cộng tác viên PawRescue</h2>
+        </div>
+        <p>Không chỉ ở hiện trường — mỗi nhóm đóng góp một kỹ năng để hành trình cứu hộ trọn vẹn hơn.</p>
+    </div>
+    <div class="contributor-grid">
+        {% for contributor in contributors %}
+            <article class="contributor-card">
+                <div class="contributor-photo">
+                    {% if contributor.photo %}
+                        <img src="{{ contributor.photo.url }}" alt="{{ contributor.name }}" loading="lazy">
+                    {% elif contributor.static_image_path %}
+                        <img src="{% static contributor.static_image_path %}" alt="{{ contributor.name }}" loading="lazy">
+                    {% endif %}
+                    <span>{{ forloop.counter|stringformat:"02d" }}</span>
+                </div>
+                <div class="contributor-copy">
+                    <span>{{ contributor.role }}</span>
+                    <h3>{{ contributor.name }}</h3>
+                    <p>{{ contributor.bio }}</p>
+                    {% if contributor.photo_credit %}<span class="contributor-credit">Ảnh: {{ contributor.photo_credit }}</span>{% endif %}
+                </div>
+            </article>
+        {% empty %}
+            <p>Các nhóm cộng tác viên đang được cập nhật.</p>
+        {% endfor %}
+    </div>
+    <div class="home-section-action"><a class="button button-light" href="{% url 'rescue:team' %}">Gặp toàn bộ đội ngũ</a></div>
+</section>
+
+<section class="feedback-section" id="feedback">
+    <div class="container feedback-shell">
+        <div class="feedback-intro">
+            <span class="eyebrow">Lắng nghe để tốt hơn</span>
+            <h2>Góp một ý nhỏ,<br>tạo thay đổi lớn.</h2>
+            <p>Mọi phản hồi đều được chuyển thẳng tới quản trị viên. Bạn có thể báo lỗi, đề xuất tính năng hoặc ngỏ lời đồng hành.</p>
+            <ul>
+                <li><span>01</span>Gửi góp ý trong chưa đầy một phút</li>
+                <li><span>02</span>Quản trị viên nhận thông báo ngay</li>
+                <li><span>03</span>Nội dung được lưu để theo dõi xử lý</li>
+            </ul>
+        </div>
+        <form class="feedback-form" method="post" action="{% url 'rescue:case-list' %}#feedback" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="form_kind" value="community_feedback">
+            {{ feedback_form.website }}
+            <div class="feedback-form-heading">
+                <span aria-hidden="true">✦</span>
+                <div><strong>Gửi góp ý cho PawRescue</strong><small>Thông tin của bạn chỉ dùng để phản hồi góp ý.</small></div>
+            </div>
+            {% if feedback_form.non_field_errors %}<div class="form-errors">{{ feedback_form.non_field_errors }}</div>{% endif %}
+            <div class="feedback-fields">
+                <div class="field-group">
+                    <label for="{{ feedback_form.name.id_for_label }}">{{ feedback_form.name.label }}</label>
+                    {{ feedback_form.name }}
+                    {{ feedback_form.name.errors }}
+                </div>
+                <div class="field-group">
+                    <label for="{{ feedback_form.email.id_for_label }}">{{ feedback_form.email.label }}</label>
+                    {{ feedback_form.email }}
+                    {{ feedback_form.email.errors }}
+                </div>
+                <div class="field-group field-span-2">
+                    <label for="{{ feedback_form.category.id_for_label }}">{{ feedback_form.category.label }}</label>
+                    {{ feedback_form.category }}
+                    {{ feedback_form.category.errors }}
+                </div>
+                <div class="field-group field-span-2">
+                    <label for="{{ feedback_form.message.id_for_label }}">{{ feedback_form.message.label }}</label>
+                    {{ feedback_form.message }}
+                    {{ feedback_form.message.errors }}
+                </div>
+            </div>
+            <button class="button button-accent" type="submit">Gửi góp ý <span aria-hidden="true">→</span></button>
+        </form>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+    <script defer src="{% static 'js/public-statistics.js' %}?v=20261031-2"></script>
 {% endblock %}

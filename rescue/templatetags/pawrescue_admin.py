@@ -56,6 +56,7 @@ def pawrescue_admin_dashboard(context, app_list=None):
             RescueCase.Status.VERIFIED,
             RescueCase.Status.ASSIGNED,
             RescueCase.Status.IN_PROGRESS,
+            RescueCase.Status.PENDING_REVIEW,
         ))),
         completed_case_count=Count("pk", filter=Q(status__in=terminal_statuses)),
     )

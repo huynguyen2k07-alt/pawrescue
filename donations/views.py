@@ -53,7 +53,8 @@ def _manager_ids(organization):
                 is_active=True,
                 role__in=MANAGER_ROLES,
                 user__is_active=True,
-            ).values_list("user_id", flat=True)
+            ).exclude(user__role=get_user_model().Role.MODERATOR)
+            .values_list("user_id", flat=True)
         )
     return recipient_ids
 
@@ -325,6 +326,7 @@ def donation_proof(request, pk):
         or _can_manage_campaign(request.user, donation.campaign)
         or (
             request.user.is_staff
+            and not getattr(request.user, "is_moderator", False)
             and (
                 request.user.has_perm("donations.view_donation")
                 or request.user.has_perm("donations.change_donation")
@@ -348,9 +350,13 @@ def expense_receipt(request, pk):
         and expense.campaign.organization.is_active
         and expense.campaign.organization.is_verified
     )
-    can_administer = request.user.is_authenticated and request.user.is_staff and (
-        request.user.has_perm("donations.view_campaignexpense")
-        or request.user.has_perm("donations.change_campaignexpense")
+    can_administer = (
+        request.user.is_authenticated and request.user.is_staff
+        and not getattr(request.user, "is_moderator", False)
+        and (
+            request.user.has_perm("donations.view_campaignexpense")
+            or request.user.has_perm("donations.change_campaignexpense")
+        )
     )
     if not public_receipt and not (
         can_administer or _can_manage_campaign(request.user, expense.campaign)

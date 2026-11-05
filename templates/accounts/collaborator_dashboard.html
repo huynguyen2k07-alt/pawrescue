@@ -8,9 +8,9 @@
 <section class="section container">
     <div class="section-heading">
         <div>
-            <span class="eyebrow eyebrow-dark">Không gian cộng tác viên</span>
+            <span class="eyebrow eyebrow-dark">{% if user.is_superuser %}Admin chính{% elif user.is_moderator %}Không gian quản trị viên{% else %}Không gian cộng tác viên{% endif %}</span>
             <h1>{% if user.is_superuser %}Tin báo cần xử lý{% else %}Ca được giao cho bạn{% endif %}</h1>
-            <p>Mở ca để xem vị trí, nhắn admin và cập nhật kết quả tại hiện trường.</p>
+            <p>{% if user.is_superuser %}Mở ca để điều phối, xem báo cáo và duyệt kết quả cuối cùng.{% elif user.is_moderator %}Mở ca được giao để kiểm tra thông tin, nhắn admin chính và báo đã hoàn thành. Kết quả sẽ được admin chính duyệt trước khi công khai.{% else %}Mở ca để xem vị trí, nhắn admin và cập nhật kết quả tại hiện trường.{% endif %}</p>
         </div>
         {% if support_is_operator %}<a class="button button-ghost" href="{% url 'support:inbox' %}">Hộp thư hỗ trợ{% if unread_message_count %} · {{ unread_message_count }} chưa đọc{% endif %}</a>{% endif %}
     </div>

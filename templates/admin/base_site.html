@@ -9,6 +9,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'admin/css/pawrescue_admin.css' %}?v=20261028-3">
+    {% if user.is_authenticated %}
+        <link rel="stylesheet" href="{% static 'css/notifications-live.css' %}?v=20261101-1">
+        <script defer src="{% static 'js/notifications-live.js' %}?v=20261102-1"></script>
+    {% endif %}
 {% endblock %}
 
 {% block branding %}
@@ -21,9 +25,16 @@
 {% block nav-global %}
     {% if user.is_authenticated %}
         <nav class="paw-admin-global" aria-label="Liên kết nhanh">
-            <a href="{% url 'support:inbox' %}">Hộp thư{% if support_admin_unread_count %} <span class="paw-nav-badge">{{ support_admin_unread_count }}</span>{% endif %}</a>
+            <a data-notification-link href="{% url 'rescue:notification-list' %}" aria-label="Thông báo{% if unread_notification_count %}, {{ unread_notification_count }} chưa đọc{% endif %}">Thông báo <span class="paw-nav-badge" data-notification-count{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</span></a>
+            {% if support_is_operator %}<a href="{% url 'support:inbox' %}">Hộp thư <span class="paw-nav-badge" data-support-unread-count{% if not support_admin_unread_count %} hidden{% endif %}>{{ support_admin_unread_count }}</span></a>{% endif %}
             <a href="{% url 'admin:rescue_rescuecase_changelist' %}">Ca cứu hộ</a>
+            {% if user.is_superuser %}<a href="{% url 'admin:rescue_communityfeedback_changelist' %}">Góp ý cộng đồng</a>{% endif %}
             <a class="paw-view-site" href="/">Xem website <span aria-hidden="true">↗</span></a>
         </nav>
     {% endif %}
+{% endblock %}
+
+{% block footer %}
+    {{ block.super }}
+    {% if user.is_authenticated %}{% include "rescue/_live_notifications.html" %}{% endif %}
 {% endblock %}

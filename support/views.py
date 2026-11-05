@@ -107,7 +107,11 @@ def _operator_conversation_queryset(user):
 def _case_for_conversation(user, conversation, case_id):
     if not str(case_id).isdigit():
         return None
-    rescue_case = RescueCase.objects.filter(pk=int(case_id), reporter_id=conversation.user_id).first()
+    # Chỉ ghép ca của đúng người báo tin và chỉ cho người có quyền xem ca đó.
+    rescue_case = RescueCase.objects.filter(
+        pk=int(case_id),
+        reporter_id=conversation.user_id,
+    ).first()
     if rescue_case and (is_rescue_admin(user) or is_case_assignee(user, rescue_case)):
         return rescue_case
     return None
@@ -150,6 +154,24 @@ def _conversation_queryset(user):
     )
 
 
+def _selected_conversation(conversations, selected_id):
+    if selected_id and selected_id.isdigit():
+        selected = conversations.filter(pk=int(selected_id)).first()
+        if selected is not None:
+            return selected
+    return conversations.first()
+
+
+def _recent_messages(conversation, limit):
+    recent_messages = list(
+        conversation.messages.select_related("sender")
+        .prefetch_related("attachments")
+        .order_by("-created_at", "-pk")[:limit]
+    )
+    recent_messages.reverse()
+    return recent_messages
+
+
 @require_GET
 @login_required
 def attachment(request, pk):
@@ -159,9 +181,9 @@ def attachment(request, pk):
     )
     conversation = item.message.conversation
     is_owner = conversation.user_id == request.user.pk
-    can_operate = is_support_operator(request.user) and (
-        request.user.is_superuser
-        or conversation.assigned_to_id in {None, request.user.pk}
+    can_operate = (
+        is_support_operator(request.user)
+        and _operator_can_access_conversation(request.user, conversation)
     )
     if not is_owner and not can_operate:
         raise Http404
@@ -235,12 +257,7 @@ def chat_state(request):
             sender_role=SupportMessage.SenderRole.ADMIN,
             is_read_by_user=False,
         ).count()
-    recent_messages = list(
-        conversation.messages.select_related("sender")
-        .prefetch_related("attachments")
-        .order_by("-created_at", "-pk")[:50]
-    )
-    recent_messages.reverse()
+    recent_messages = _recent_messages(conversation, limit=50)
     return JsonResponse(
         {
             "conversation_id": conversation.pk,
@@ -266,6 +283,8 @@ def chat_send(request):
         error = next(iter(form.errors.values()))[0]
         return JsonResponse({"error": str(error)}, status=400)
 
+    # ===== CHỨC NĂNG CHÍNH: NGƯỜI DÙNG GỬI TIN NHẮN HỖ TRỢ =====
+    # Khóa tài khoản trước khi tìm hoặc tạo hội thoại để tránh mở trùng khi gửi đồng thời.
     with transaction.atomic():
         get_user_model().objects.select_for_update().get(pk=request.user.pk)
         conversation = (
@@ -317,12 +336,10 @@ def chat_send(request):
 @support_operator_required
 def inbox(request):
     conversations = _conversation_queryset(request.user)
-    selected = None
-    selected_id = request.GET.get("conversation")
-    if selected_id and selected_id.isdigit():
-        selected = conversations.filter(pk=int(selected_id)).first()
-    if selected is None:
-        selected = conversations.first()
+    selected = _selected_conversation(
+        conversations,
+        request.GET.get("conversation"),
+    )
 
     chat_messages = SupportMessage.objects.none()
     context_case = None
@@ -336,7 +353,11 @@ def inbox(request):
         chat_messages = selected.messages.select_related("sender").prefetch_related(
             "attachments"
         )
-        context_case = _case_for_conversation(request.user, selected, request.GET.get("case", ""))
+        context_case = _case_for_conversation(
+            request.user,
+            selected,
+            request.GET.get("case", ""),
+        )
         if context_case and request.GET.get("sent") != "1":
             display_name = selected.user.full_name or "bạn"
             draft_message = (
@@ -443,12 +464,10 @@ def open_case_chat(request, pk):
 @support_operator_required
 def inbox_state(request):
     conversations = _conversation_queryset(request.user)
-    selected = None
-    selected_id = request.GET.get("conversation")
-    if selected_id and selected_id.isdigit():
-        selected = conversations.filter(pk=int(selected_id)).first()
-    if selected is None:
-        selected = conversations.first()
+    selected = _selected_conversation(
+        conversations,
+        request.GET.get("conversation"),
+    )
 
     selected_payload = None
     if selected:
@@ -456,12 +475,7 @@ def inbox_state(request):
             sender_role=SupportMessage.SenderRole.USER,
             is_read_by_admin=False,
         ).update(is_read_by_admin=True)
-        recent_messages = list(
-            selected.messages.select_related("sender")
-            .prefetch_related("attachments")
-            .order_by("-created_at", "-pk")[:100]
-        )
-        recent_messages.reverse()
+        recent_messages = _recent_messages(selected, limit=100)
         selected_payload = {
             "id": selected.pk,
             "status": selected.status,
@@ -483,12 +497,18 @@ def inbox_state(request):
 @require_POST
 @support_operator_required
 def admin_reply(request, pk):
+    # ===== CHỨC NĂNG CHÍNH: QUẢN TRỊ VIÊN PHẢN HỒI NGƯỜI DÙNG =====
+    # Kiểm tra người được xử lý hội thoại, lưu câu trả lời và giữ liên kết về đúng ca cứu hộ.
     snapshot = get_object_or_404(
         _operator_conversation_queryset(request.user),
         pk=pk,
     )
     return_url = reverse("support:inbox") + f"?conversation={pk}"
-    context_case = _case_for_conversation(request.user, snapshot, request.POST.get("case", ""))
+    context_case = _case_for_conversation(
+        request.user,
+        snapshot,
+        request.POST.get("case", ""),
+    )
     if context_case:
         return_url += f"&case={context_case.pk}"
     form = SupportMessageForm(request.POST, request.FILES)

@@ -60,7 +60,7 @@ class UserAdmin(BaseUserAdmin):
     )
 
     def get_readonly_fields(self, request, obj=None):
-        # Chỉ quản trị viên cao nhất được sửa quyền, tránh việc người được ủy quyền tự nâng quyền.
+        # Chỉ admin chính được tạo/cấp quyền quản trị; POST tự sửa vai trò hay quyền đều bị bỏ qua.
         fields = super().get_readonly_fields(request, obj)
         if not request.user.is_superuser:
             fields += self.permission_fields
@@ -71,7 +71,8 @@ class UserAdmin(BaseUserAdmin):
         if request.user.is_superuser:
             return queryset
         return queryset.filter(
-            Q(pk=request.user.pk) | Q(is_staff=False, is_superuser=False)
+            Q(pk=request.user.pk)
+            | Q(is_staff=False, is_superuser=False, role=User.Role.MEMBER)
         )
 
 

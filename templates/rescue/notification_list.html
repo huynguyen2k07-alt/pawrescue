@@ -10,37 +10,46 @@
             <h1>Thông báo của bạn</h1>
             <p>Theo dõi những thay đổi mới nhất của các ca bạn quan tâm.</p>
         </div>
-        {% if unread_count %}
-            <form method="post" action="{% url 'rescue:notification-read-all' %}">
-                {% csrf_token %}
-                <button class="button button-ghost button-small" type="submit">Đánh dấu tất cả đã đọc</button>
-            </form>
-        {% endif %}
+        <form data-notification-read-all{% if not unread_count %} hidden{% endif %} method="post" action="{% url 'rescue:notification-read-all' %}">
+            {% csrf_token %}
+            <input type="hidden" name="filter" value="{{ selected_filter }}">
+            <input type="hidden" name="page" value="{{ page_obj.number }}">
+            <button class="button button-ghost button-small" type="submit">Đánh dấu tất cả đã đọc</button>
+        </form>
     </header>
 
     <nav class="notification-tabs" aria-label="Lọc thông báo">
         <a class="{% if selected_filter == 'all' %}active{% endif %}" href="{% url 'rescue:notification-list' %}">
-            Tất cả <span>{{ total_count }}</span>
+            Tất cả <span data-notification-total-count>{{ total_count }}</span>
         </a>
         <a class="{% if selected_filter == 'unread' %}active{% endif %}" href="{% url 'rescue:notification-list' %}?filter=unread">
-            Chưa đọc <span>{{ unread_count }}</span>
+            Chưa đọc <span data-notification-unread-count>{{ unread_count }}</span>
         </a>
     </nav>
 
-    <div class="notification-list">
+    <p data-notification-read-status role="status" aria-live="polite"></p>
+    <p data-notification-new-items hidden><a href="{% url 'rescue:notification-list' %}{% if selected_filter == 'unread' %}?filter=unread{% endif %}">Có thông báo mới. Xem các cập nhật mới nhất →</a></p>
+    <div class="notification-list" data-live-notification-list data-filter="{{ selected_filter }}" data-page="{{ page_obj.number }}" data-csrf-token="{{ csrf_token }}">
         {% for notification in page_obj %}
-            <article class="notification-item{% if not notification.is_read %} unread{% endif %}">
-                <form method="post" action="{% url 'rescue:notification-open' notification.pk %}">
-                    {% csrf_token %}
-                    <button class="notification-open" type="submit">
+            <article class="notification-item{% if not notification.is_read %} unread{% endif %}" data-notification-id="{{ notification.pk }}" data-notification-read="{{ notification.is_read|yesno:'true,false' }}">
+                    <div class="notification-open">
                         <span class="notification-kind notification-kind-{{ notification.kind }}" aria-hidden="true">
                             {% if notification.kind == 'case_claimed' %}🤝{% elif notification.kind == 'case_assigned' %}🧭{% elif notification.kind == 'case_updated' %}📷{% elif notification.kind == 'adoption_submitted' %}💌{% elif notification.kind == 'adoption_reviewed' %}🏡{% elif notification.kind == 'donation_submitted' %}💝{% elif notification.kind == 'donation_reviewed' %}🧾{% else %}↻{% endif %}
                         </span>
-                        <span class="notification-content">
-                            <span class="notification-title-row">
-                                <strong>{{ notification.title }}</strong>
+                        <div class="notification-content">
+                            <div class="notification-title-row">
+                                <strong><a data-notification-title href="{{ notification.destination_url }}">{{ notification.title }}</a></strong>
                                 <time datetime="{{ notification.created_at|date:'c' }}">{{ notification.created_at|timesince }} trước</time>
-                            </span>
+                            </div>
+                            <div class="notification-live-actions">
+                                <a href="{{ notification.destination_url }}">Xem nội dung →</a>
+                                <form data-notification-read-form{% if notification.is_read %} hidden{% endif %} method="post" action="{% url 'rescue:notification-open' notification.pk %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="filter" value="{{ selected_filter }}">
+                                    <input type="hidden" name="page" value="{{ page_obj.number }}">
+                                    <button class="button button-ghost button-small" type="submit">Đánh dấu đã đọc</button>
+                                </form>
+                            </div>
                             <span class="notification-message">{{ notification.message }}</span>
                             <span class="notification-meta">
                                 {% if notification.rescue_case %}Ca #{{ notification.rescue_case_id }} · {{ notification.rescue_case.title }}{% elif notification.kind == 'donation_submitted' or notification.kind == 'donation_reviewed' %}Quỹ cứu hộ{% else %}Thông báo hệ thống{% endif %}
@@ -48,13 +57,12 @@
                                     · bởi {{ notification.actor.full_name|default:notification.actor.email }}
                                 {% endif %}
                             </span>
-                        </span>
+                        </div>
                         {% if not notification.is_read %}<span class="unread-dot" aria-label="Chưa đọc"></span>{% endif %}
-                    </button>
-                </form>
+                    </div>
             </article>
         {% empty %}
-            <div class="empty-state compact-empty">
+            <div class="empty-state compact-empty" data-notification-empty>
                 <span aria-hidden="true">🔔</span>
                 <h2>{% if selected_filter == 'unread' %}Bạn đã đọc hết thông báo{% else %}Chưa có thông báo nào{% endif %}</h2>
                 <p>Các cập nhật về tiếp nhận, phân công và trạng thái ca cứu hộ sẽ xuất hiện tại đây.</p>
@@ -62,6 +70,10 @@
             </div>
         {% endfor %}
     </div>
+
+    {% if page_obj.number == 1 %}
+        <p><a href="?filter={{ selected_filter }}&amp;page=2" data-notification-older{% if page_obj.paginator.count <= 20 %} hidden{% endif %}>Xem thông báo cũ hơn →</a></p>
+    {% endif %}
 
     {% if page_obj.paginator.num_pages > 1 %}
         <nav class="pagination" aria-label="Phân trang thông báo">

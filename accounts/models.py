@@ -8,6 +8,7 @@ class User(AbstractUser):
     class Role(models.TextChoices):
         MEMBER = "member", "Người dùng"
         COLLABORATOR = "collaborator", "Cộng tác viên hỗ trợ"
+        MODERATOR = "moderator", "Quản trị viên cứu hộ"
 
     username = None
 
@@ -28,6 +29,10 @@ class User(AbstractUser):
     @property
     def is_collaborator(self):
         return self.role == self.Role.COLLABORATOR
+
+    @property
+    def is_moderator(self):
+        return self.role == self.Role.MODERATOR
 
     def __str__(self):
         return self.email

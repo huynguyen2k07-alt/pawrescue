@@ -158,6 +158,22 @@ class SimpleAdminNavigationTests(TestCase):
                 self.assertEqual(self.client.get(reverse(name)).status_code, 200)
         self.assertTrue(RescueCase.objects.filter(pk=self.case.pk).exists())
 
+    def test_processing_metric_includes_cases_waiting_for_main_admin_approval(self):
+        self.case.status = RescueCase.Status.PENDING_REVIEW
+        self.case.save(update_fields=("status",))
+        dashboard = self.client.get(reverse("admin:index"))
+        overview = self.overview_for(dashboard)
+        self.assertEqual(overview["in_progress_case_count"], 1)
+        processing_url = (
+            reverse("admin:rescue_rescuecase_changelist")
+            + "?status__in=verified,assigned,in_progress,pending_review"
+        )
+        self.assertContains(dashboard, f'href="{processing_url}"')
+        listing = self.client.get(processing_url)
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.context["cl"].result_count, 1)
+        self.assertEqual([case.pk for case in listing.context["cl"].result_list], [self.case.pk])
+
     def test_app_index_also_hides_unrelated_models(self):
         self.assertEqual(admin.site.get_app_list(self.request_for(self.owner), "donations"), [])
         rescue_apps = admin.site.get_app_list(self.request_for(self.owner), "rescue")

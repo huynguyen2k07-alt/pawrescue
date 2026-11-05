@@ -256,6 +256,7 @@ class RescueCaseAdmin(RescueAdminOnlyMixin, admin.ModelAdmin):
             RescueCase.Status.VERIFIED,
             RescueCase.Status.ASSIGNED,
             RescueCase.Status.IN_PROGRESS,
+            RescueCase.Status.PENDING_REVIEW,
         )
         cases = RescueCase.objects.select_related("organization", "reporter")
         counts = cases.aggregate(
@@ -318,12 +319,23 @@ class RescueCaseAdmin(RescueAdminOnlyMixin, admin.ModelAdmin):
                 review_form = CaseStatusUpdateForm(
                     {"status": status, "note": request.POST.get("note", "")},
                     current_status=rescue_case.status,
+                    rescue_case=rescue_case,
                 )
                 if not review_form.is_valid():
-                    self.message_user(request, "Hãy ghi đánh giá kết quả trước khi chốt ca.", level=messages.WARNING)
+                    error_message = " ".join(
+                        str(error)
+                        for errors in review_form.errors.values()
+                        for error in errors
+                    )
+                    self.message_user(request, error_message, level=messages.WARNING)
+                    review_target = (
+                        "#case-complete"
+                        if status == RescueCase.Status.RESCUED
+                        else f"?review={status}#case-review"
+                    )
                     return HttpResponseRedirect(
                         reverse("rescue:case-detail", args=(rescue_case.pk,))
-                        + f"?review={status}#case-review"
+                        + review_target
                     )
                 history_note = review_form.cleaned_data["note"]
             if (

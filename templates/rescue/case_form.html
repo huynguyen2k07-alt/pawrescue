@@ -4,7 +4,7 @@
 {% block title %}Báo ca cứu hộ · PawRescue{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -17,8 +17,17 @@
 
     <form class="panel form-panel" method="post" enctype="multipart/form-data" novalidate>{# Báo cáo gửi quản trị viên cần địa chỉ cụ thể và ghim bản đồ cùng xác định đúng hiện trường. #}
         {% csrf_token %}
-        {% if form.non_field_errors %}
-            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% if form.errors %}
+            <div class="form-errors" id="case-form-errors" role="alert">
+                <strong>Chưa gửi được báo cáo tới admin.</strong>
+                <p>Hồ sơ chưa được lưu. Hãy sửa các mục dưới đây rồi gửi lại:</p>
+                {{ form.non_field_errors }}
+                <ul>
+                    {% for field in form %}{% for error in field.errors %}
+                        <li><a href="#{{ field.id_for_label }}">{{ field.label }}</a>: {{ error }}</li>
+                    {% endfor %}{% endfor %}
+                </ul>
+            </div>
         {% endif %}
 
         <div class="form-grid">
@@ -28,9 +37,9 @@
                         <div class="location-picker-heading">
                             <div>
                                 <label id="location-picker-label">Ghim vị trí cần cứu hộ <span aria-hidden="true">*</span></label>
-                                <small>Bấm hoặc kéo ghim đến nơi có con vật. Chỉ dùng vị trí hiện tại khi bạn đang ở hiện trường.</small>
+                                <small>Vị trí thiết bị có thể gần đúng.{% if address_search_enabled %} Nếu ghim lệch, tìm địa chỉ ở trên rồi kiểm tra/kéo ghim đúng hiện trường.{% else %} Hãy kiểm tra và kéo ghim đúng hiện trường trước khi xác nhận.{% endif %}</small>
                             </div>
-                            <button class="button button-ghost button-small" id="use-current-location" type="button">Dùng vị trí hiện tại</button>
+                            <button class="button button-primary button-small" id="use-current-location" type="button" aria-describedby="location-status" aria-busy="false">Dùng vị trí hiện tại</button>
                         </div>
                         <div
                             id="location-picker-map"
@@ -46,6 +55,12 @@
                         <p class="location-status" id="location-status" aria-live="polite">Chưa chọn tọa độ.</p>
                         <p class="privacy-note" id="location-manual-help">Nhập địa chỉ có số nhà, tên đường hoặc mốc dễ nhận biết, khớp với ghim bản đồ.</p>
                         <p class="privacy-note" id="location-summary" aria-live="polite"></p>
+                        <label class="checkbox-control" for="{{ form.location_confirmed.id_for_label }}">
+                            {{ form.location_confirmed }}
+                            <span>{{ form.location_confirmed.label }} <span aria-hidden="true">*</span></span>
+                        </label>
+                        {% for error in form.location_confirmed.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                        <p class="privacy-note">Admin và người được giao ca nhận địa chỉ cùng ghim đã chọn. Vòng sai số chỉ là gợi ý khi lấy vị trí.</p>
                         <noscript><p class="field-error">Trình duyệt đang tắt JavaScript. Hãy nhập địa chỉ cụ thể và tọa độ tại Đà Nẵng ở hai ô bên dưới.</p></noscript>
                         <details class="case-operation" id="manual-coordinates"{% if form.latitude.errors or form.longitude.errors %} open{% endif %}>
                             <summary>Nhập tọa độ thủ công</summary>
@@ -57,7 +72,7 @@
                         </details>
                     </div>
                 {% endif %}
-                {% if field.name != 'latitude' and field.name != 'longitude' and field.name != 'animal_details' and field.name != 'contact_name' %}
+                {% if field.name != 'latitude' and field.name != 'longitude' and field.name != 'animal_details' and field.name != 'contact_name' and field.name != 'location_confirmed' %}
                 <div class="field {% if field.name == 'description' or field.name == 'address' or field.name == 'images' or field.name == 'title' or field.name == 'is_location_private' %}field-wide{% endif %}">
                     {% if field.name == 'is_location_private' %}
                         <label class="checkbox-control" for="{{ field.id_for_label }}">
@@ -68,7 +83,17 @@
                         <label for="{{ field.id_for_label }}">{% if field.name == 'address' %}Địa chỉ cụ thể / mốc nhận biết{% else %}{{ field.label }}{% endif %}{% if field.field.required %}<span aria-hidden="true">*</span>{% endif %}</label>
                         {{ field }}
                     {% endif %}
-                    {% if field.name == 'address' %}<small>Ví dụ: trước số 430 Hùng Vương, gần cổng chợ, Hải Châu, Đà Nẵng.</small>{% endif %}
+                    {% if field.name == 'address' %}
+                        <small>Nhập số nhà, tên đường hoặc địa điểm dễ nhận biết tại Đà Nẵng, rồi tìm và kiểm tra ghim.</small>
+                        {% if address_search_enabled %}
+                            <div data-address-search data-search-url="{% url 'rescue:location-search' %}" data-csrf-token="{{ csrf_token }}">
+                                <button class="button button-primary button-small" id="find-address" type="button" aria-busy="false" aria-describedby="address-search-status">Tìm địa chỉ trên bản đồ</button>
+                                <p class="location-status" id="address-search-status" role="status" aria-live="polite"></p>
+                                <div class="address-search-results" id="address-search-results" aria-label="Địa chỉ gợi ý"></div>
+                                <small>Địa chỉ tìm kiếm được gửi tới <a href="https://www.geoapify.com/" target="_blank" rel="noopener noreferrer">Geoapify</a> để gợi ý vị trí. Hãy kiểm tra ghim trước khi gửi tin báo.</small>
+                            </div>
+                        {% endif %}
+                    {% endif %}
                     {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
                     {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
                 </div>
@@ -94,6 +119,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="{% static 'js/maps.js' %}?v=20261027-2"></script>
+<script defer src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
+<script defer src="{% static 'js/maps.js' %}?v=20261102-6"></script>
+{% if address_search_enabled %}<script defer src="{% static 'js/address-search.js' %}?v=20261102-1"></script>{% endif %}
 {% endblock %}

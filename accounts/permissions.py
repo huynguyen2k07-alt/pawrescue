@@ -12,6 +12,8 @@ def is_support_operator(user):
     """Kiểm tra tài khoản có quyền làm việc trong khu vực hỗ trợ và cộng tác viên."""
     if not user or not user.is_authenticated or not user.is_active:
         return False
+    if getattr(user, "is_moderator", False) and not user.is_superuser:
+        return False
     return bool(
         user.is_superuser
         or getattr(user, "is_collaborator", False)
@@ -33,7 +35,9 @@ def support_operator_required(view_func):
 
 def support_operator_queryset(user_model):
     """Lấy nhân sự hỗ trợ đang hoạt động, kể cả tài khoản được cấp quyền riêng."""
-    return user_model.objects.filter(is_active=True).filter(
+    return user_model.objects.filter(is_active=True).exclude(
+        role=user_model.Role.MODERATOR, is_superuser=False,
+    ).filter(
         Q(is_superuser=True)
         | Q(role=user_model.Role.COLLABORATOR)
         | Q(

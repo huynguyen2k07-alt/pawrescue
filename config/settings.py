@@ -82,6 +82,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'rescue.context_processors.unread_notifications',
                 'support.context_processors.support_chat',
+                'donations.context_processors.donation_footer',
             ],
         },
     },
@@ -141,6 +142,7 @@ PRIVATE_SUPPORT_MEDIA_ROOT = BASE_DIR / 'private_media' / 'support'
 PRIVATE_DONATION_MEDIA_ROOT = BASE_DIR / 'private_media' / 'donations'
 PRIVATE_RESCUE_MEDIA_ROOT = BASE_DIR / 'private_media' / 'rescue'
 MAPTILER_API_KEY = os.getenv("MAPTILER_API_KEY", "").strip()
+GEOAPIFY_API_KEY = os.getenv("GEOAPIFY_API_KEY", "").strip()
 
 LOGIN_URL = 'accounts:login'
 LOGIN_REDIRECT_URL = 'rescue:case-list'

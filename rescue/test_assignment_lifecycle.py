@@ -166,6 +166,8 @@ class AssignmentLifecycleTests(TestCase):
         self.assertTrue(before.context["can_view_location"])
         self.assertTrue(before.context["can_view_contact"])
         self.assertFalse(before.context["map_is_approximate"])
+        self.assertEqual(before.context["map_latitude"], float(self.case.latitude))
+        self.assertEqual(before.context["map_longitude"], float(self.case.longitude))
         self.assertContains(before, self.case.address)
         self.client.post(self.revoke_url())
         after = self.assignee_client.get(self.detail_url())
@@ -178,11 +180,10 @@ class AssignmentLifecycleTests(TestCase):
         self.assertNotContains(after, self.case.address)
         self.assertNotContains(after, self.case.contact_phone)
         self.assertNotContains(after, self.assignment.notes)
-        marker = next(item for item in self.assignee_client.get(reverse("rescue:case-map")).context["map_cases"]
-                      if item["id"] == self.case.pk)
-        self.assertTrue(marker["is_approximate"])
-        self.assertNotEqual(marker["latitude"], float(self.case.latitude))
-        self.assertNotEqual(marker["longitude"], float(self.case.longitude))
+        self.assertEqual(after.context["map_latitude"], round(float(self.case.latitude), 2))
+        self.assertEqual(after.context["map_longitude"], round(float(self.case.longitude), 2))
+        self.assertNotEqual(after.context["map_latitude"], float(self.case.latitude))
+        self.assertNotEqual(after.context["map_longitude"], float(self.case.longitude))
 
     def test_main_admin_and_reporter_keep_exact_location_after_assignment_ends(self):
         self.client.post(self.revoke_url())

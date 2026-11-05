@@ -38,7 +38,7 @@ class RescueOnlySurfaceTests(TestCase):
         self.assertContains(response, reverse("rescue:case-create"))
         self.assertContains(response, reverse("rescue:case-map"))
         self.assertNotContains(response, "/adoptions/")
-        self.assertNotContains(response, "/donations/")
+        self.assertContains(response, "/donations/")
         self.assertNotContains(response, "Nhận nuôi")
 
     def test_profile_and_admin_have_no_adoption_links(self):

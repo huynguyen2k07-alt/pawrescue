@@ -109,6 +109,7 @@ class RescueDispatchWorkflowTests(TestCase):
             "description": "A dog has an injured leg.",
             "address": "456 Trần Phú, Hải Châu, Đà Nẵng",
             "latitude": "16.060500", "longitude": "108.209800",
+            "location_confirmed": "on",
             "contact_name": self.reporter.full_name,
             "contact_phone": self.reporter.phone,
         }
@@ -178,11 +179,13 @@ class RescueDispatchWorkflowTests(TestCase):
         self.assertFalse(detail.context["map_is_approximate"])
         self.assertContains(detail, self.private_case.contact_phone)
         self.assertContains(detail, self.private_case.address)
-        marker = next(item for item in self.client.get(
-            reverse("rescue:case-map"),
-        ).context["map_cases"] if item["id"] == self.private_case.pk)
-        self.assertEqual(marker["latitude"], float(self.private_case.latitude))
-        self.assertEqual(marker["longitude"], float(self.private_case.longitude))
+        self.assertEqual(detail.context["map_latitude"], float(self.private_case.latitude))
+        self.assertEqual(detail.context["map_longitude"], float(self.private_case.longitude))
+        map_response = self.client.get(reverse("rescue:case-map"))
+        self.assertNotIn(
+            self.private_case.pk,
+            [item["id"] for item in map_response.context["map_cases"]],
+        )
 
     def test_private_report_images_require_admin_reporter_or_active_assignment(self):
         with TemporaryDirectory() as media_root, override_settings(
@@ -207,8 +210,14 @@ class RescueDispatchWorkflowTests(TestCase):
             self.client.force_login(self.assignee)
             self.assertEqual(self.client.get(image_url).status_code, 404)
 
-    def test_verified_case_remains_available_on_public_map(self):
+    def test_verified_case_is_hidden_until_rescued_on_public_map(self):
         self.private_case.status = RescueCase.Status.VERIFIED
+        self.private_case.save(update_fields=("status",))
+        response = self.client.get(reverse("rescue:case-map"))
+        self.assertEqual(response.context["map_cases"], [])
+        self.assertNotContains(response, self.private_case.title)
+
+        self.private_case.status = RescueCase.Status.RESCUED
         self.private_case.save(update_fields=("status",))
         response = self.client.get(reverse("rescue:case-map"))
         marker = next(item for item in response.context["map_cases"]

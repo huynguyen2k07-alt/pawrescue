@@ -4,12 +4,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Gửi tin báo cứu hộ kèm vị trí để quản trị viên tiếp nhận và điều phối xử lý.">
+    <meta name="description" content="Kết nối cộng đồng cứu hộ động vật, chia sẻ kiến thức và gửi tin báo kèm vị trí để quản trị viên tiếp nhận, điều phối.">
     <title>{% block title %}PawRescue{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261028-3">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261102-3">
+    {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'css/notifications-live.css' %}?v=20261101-1">{% endif %}
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% if request.resolver_match.namespace == 'donations' %}theme-donation{% elif request.resolver_match.url_name == 'knowledge-list' or request.resolver_match.url_name == 'knowledge-detail' %}theme-knowledge{% elif request.resolver_match.url_name == 'team' %}theme-team{% else %}theme-rescue{% endif %}">
@@ -24,6 +25,8 @@
             <nav class="main-nav" aria-label="Điều hướng chính">
                 <a class="nav-link{% if request.resolver_match.url_name == 'case-list' or request.resolver_match.url_name == 'case-detail' or request.resolver_match.url_name == 'case-messages' %} is-active{% endif %}" href="{% url 'rescue:case-list' %}" {% if request.resolver_match.url_name == 'case-list' or request.resolver_match.url_name == 'case-detail' or request.resolver_match.url_name == 'case-messages' %}aria-current="page"{% endif %}>Tin cứu hộ</a>
                 <a class="nav-link{% if request.resolver_match.url_name == 'case-map' %} is-active{% endif %}" href="{% url 'rescue:case-map' %}" {% if request.resolver_match.url_name == 'case-map' %}aria-current="page"{% endif %}>Bản đồ</a>
+                <a class="nav-link{% if request.resolver_match.url_name == 'knowledge-list' or request.resolver_match.url_name == 'knowledge-detail' %} is-active{% endif %}" href="{% url 'rescue:knowledge-list' %}" {% if request.resolver_match.url_name == 'knowledge-list' or request.resolver_match.url_name == 'knowledge-detail' %}aria-current="page"{% endif %}>Kiến thức</a>
+                <a class="nav-link{% if request.resolver_match.url_name == 'team' %} is-active{% endif %}" href="{% url 'rescue:team' %}" {% if request.resolver_match.url_name == 'team' %}aria-current="page"{% endif %}>Đội ngũ</a>
                 {% if user.is_authenticated %}<a class="nav-link{% if request.resolver_match.url_name == 'my-cases' %} is-active{% endif %}" href="{% url 'rescue:my-cases' %}" {% if request.resolver_match.url_name == 'my-cases' %}aria-current="page"{% endif %}>Tin của tôi</a>{% endif %}
             </nav>
 
@@ -31,13 +34,12 @@
                 {% if user.is_authenticated %}
                     <a
                         class="notification-nav-link{% if unread_notification_count %} has-unread{% endif %}"
+                        data-notification-link
                         href="{% url 'rescue:notification-list' %}"
                         aria-label="Thông báo{% if unread_notification_count %}, {{ unread_notification_count }} chưa đọc{% endif %}"
                     >
                         <svg aria-hidden="true" viewBox="0 0 24 24" width="19" height="19"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        {% if unread_notification_count %}
-                            <span class="notification-badge">{{ unread_notification_count }}</span>
-                        {% endif %}
+                        <span class="notification-badge" data-notification-count{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</span>
                     </a>
                     <details class="account-menu">
                         <summary aria-label="Mở menu tài khoản">
@@ -51,7 +53,7 @@
                                 <a href="{% url 'accounts:profile' %}">Hồ sơ cá nhân</a>
                                 <a href="{% url 'rescue:my-cases' %}">Tin báo của tôi</a>
                                 {% if rescue_has_workspace %}<a href="{% url 'collaborators:dashboard' %}">Ca cứu hộ được giao</a>{% endif %}
-                                {% if support_is_operator %}<a href="{% url 'support:inbox' %}">Hộp thư hỗ trợ{% if support_admin_unread_count %} ({{ support_admin_unread_count }}){% endif %}</a>{% endif %}
+                                {% if support_is_operator %}<a href="{% url 'support:inbox' %}">Hộp thư hỗ trợ <span class="support-nav-count" data-support-unread-count{% if not support_admin_unread_count %} hidden{% endif %}>{{ support_admin_unread_count }}</span></a>{% endif %}
                                 {% if user.is_superuser %}<a href="{% url 'admin:rescue_rescuecase_changelist' %}">Quản lý tin báo</a>{% endif %}
                             </nav>
                             <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Đăng xuất</button></form>
@@ -67,6 +69,8 @@
                         <nav aria-label="Điều hướng trên điện thoại">
                             <a {% if request.resolver_match.url_name == 'case-list' or request.resolver_match.url_name == 'case-detail' or request.resolver_match.url_name == 'case-messages' %}class="is-active" aria-current="page"{% endif %} href="{% url 'rescue:case-list' %}">Tin cứu hộ <span>→</span></a>
                             <a {% if request.resolver_match.url_name == 'case-map' %}class="is-active" aria-current="page"{% endif %} href="{% url 'rescue:case-map' %}">Bản đồ cứu hộ <span>→</span></a>
+                            <a {% if request.resolver_match.url_name == 'knowledge-list' or request.resolver_match.url_name == 'knowledge-detail' %}class="is-active" aria-current="page"{% endif %} href="{% url 'rescue:knowledge-list' %}">Cẩm nang cộng đồng <span>→</span></a>
+                            <a {% if request.resolver_match.url_name == 'team' %}class="is-active" aria-current="page"{% endif %} href="{% url 'rescue:team' %}">Đội ngũ PawRescue <span>→</span></a>
                         </nav>
                         {% if user.is_authenticated %}
                             <div class="mobile-account-links">
@@ -74,7 +78,7 @@
                                 <a href="{% url 'accounts:profile' %}">Hồ sơ cá nhân</a>
                                 <a href="{% url 'rescue:my-cases' %}">Tin báo của tôi</a>
                                 {% if rescue_has_workspace %}<a href="{% url 'collaborators:dashboard' %}">Ca cứu hộ được giao</a>{% endif %}
-                                {% if support_is_operator %}<a href="{% url 'support:inbox' %}">Hộp thư hỗ trợ{% if support_admin_unread_count %} ({{ support_admin_unread_count }}){% endif %}</a>{% endif %}
+                                {% if support_is_operator %}<a href="{% url 'support:inbox' %}">Hộp thư hỗ trợ <span class="support-nav-count" data-support-unread-count{% if not support_admin_unread_count %} hidden{% endif %}>{{ support_admin_unread_count }}</span></a>{% endif %}
                                 {% if user.is_superuser %}<a href="{% url 'admin:rescue_rescuecase_changelist' %}">Quản lý tin báo</a>{% endif %}
                                 <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Đăng xuất</button></form>
                             </div>
@@ -101,12 +105,29 @@
     </main>
 
     <footer class="site-footer">
-        <div class="container footer-wrap footer-rescue-simple">
+        <div class="container footer-wrap">
             <div class="footer-brand">
                 <a class="brand brand-footer" href="{% url 'rescue:case-list' %}"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="9" cy="9" r="4"/><circle cx="23" cy="9" r="4"/><circle cx="5.5" cy="18" r="3.5"/><circle cx="26.5" cy="18" r="3.5"/><path d="M16 13c-5.2 0-9 5.1-7.4 9.5 1.2 3.2 4.3 2.7 7.4 1.6 3.1 1.1 6.2 1.6 7.4-1.6C25 18.1 21.2 13 16 13Z"/></svg></span><span class="brand-copy"><strong>Paw<span>Rescue</span></strong></span></a>
-                <p>Gửi tin báo. Kết nối cứu hộ. Theo dõi kết quả.</p>
+                <p>Kết nối cộng đồng và các đơn vị cứu hộ để mỗi động vật đều có cơ hội được giúp đỡ đúng lúc.</p>
             </div>
-            <nav class="footer-links" aria-label="Điều hướng cuối trang"><a href="{% url 'rescue:case-list' %}">Tin cứu hộ</a><a href="{% url 'rescue:case-map' %}">Bản đồ</a><a href="{% url 'rescue:case-create' %}">Gửi tin báo</a>{% if user.is_authenticated %}<a href="{% url 'rescue:my-cases' %}">Tin của tôi</a>{% else %}<a href="{% url 'accounts:login' %}">Đăng nhập</a>{% endif %}</nav>
+            <nav class="footer-links" aria-label="Khám phá"><strong>Khám phá</strong><a href="{% url 'rescue:case-list' %}">Các ca cứu hộ</a><a href="{% url 'rescue:case-map' %}">Bản đồ</a><a href="{% url 'rescue:knowledge-list' %}">Kiến thức</a><a href="{% url 'rescue:team' %}">Đội ngũ</a><a href="{% url 'donations:campaign-list' %}">Quỹ cứu hộ</a></nav>
+            <nav class="footer-links" aria-label="Tham gia"><strong>Tham gia</strong><a href="{% url 'rescue:case-create' %}">Báo ca cứu hộ</a><a href="{% url 'rescue:case-list' %}#feedback">Gửi góp ý</a>{% if user.is_authenticated %}<a href="{% url 'rescue:my-cases' %}">Tin báo của tôi</a><a href="{% url 'accounts:profile' %}">Tài khoản</a>{% else %}<a href="{% url 'accounts:register' %}">Tạo tài khoản</a><a href="{% url 'accounts:login' %}">Đăng nhập</a>{% endif %}</nav>
+            <div class="footer-note footer-donation" id="donate">
+                <strong>Chung tay ủng hộ cứu hộ</strong>
+                {% if footer_donation_campaign %}
+                    <p><a href="{% url 'donations:campaign-detail' footer_donation_campaign.pk %}">{{ footer_donation_campaign.title }}</a></p>
+                    <dl>
+                        <div><dt>Ngân hàng</dt><dd>{{ footer_donation_campaign.bank_name }}</dd></div>
+                        <div><dt>Chủ tài khoản</dt><dd>{{ footer_donation_campaign.bank_account_name }}</dd></div>
+                        <div><dt>Số tài khoản</dt><dd>{{ footer_donation_campaign.bank_account_number }}</dd></div>
+                        {% if footer_donation_campaign.transfer_content %}<div><dt>Nội dung</dt><dd>{{ footer_donation_campaign.transfer_content }}</dd></div>{% endif %}
+                    </dl>
+                    <a href="{% url 'donations:campaign-detail' footer_donation_campaign.pk %}">Xem chiến dịch và ghi nhận đóng góp →</a>
+                {% else %}
+                    <p>Cùng góp sức cho chi phí cứu hộ và chăm sóc động vật. Thông tin chuyển khoản được công bố tại từng chiến dịch.</p>
+                    <a href="{% url 'donations:campaign-list' %}">Xem các quỹ cứu hộ →</a>
+                {% endif %}
+            </div>
         </div>
         <div class="container footer-bottom"><span>© {% now "Y" %} PawRescue</span><span>Được xây dựng vì động vật và cộng đồng.</span></div>
     </footer>
@@ -115,6 +136,10 @@
     {% endif %}
     <script defer src="{% static 'js/motion.js' %}?v=20260928-4"></script>
     <script defer src="{% static 'js/support-chat.js' %}?v=20261027-1"></script>
+    {% if user.is_authenticated %}
+        {% include "rescue/_live_notifications.html" %}
+        <script defer src="{% static 'js/notifications-live.js' %}?v=20261102-1"></script>
+    {% endif %}
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

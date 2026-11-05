@@ -6,7 +6,7 @@ from django.db.models import Count, Q
 from django.shortcuts import redirect, render
 
 from rescue.models import RescueCase
-from rescue.permissions import is_rescue_admin
+from rescue.permissions import is_rescue_admin, is_rescue_moderator
 from rescue.notifications import available_notifications
 from support.models import SupportConversation, SupportMessage
 
@@ -15,6 +15,8 @@ from .permissions import is_support_operator
 
 
 def register(request):
+    # ===== CHỨC NĂNG CHÍNH: ĐĂNG KÝ TÀI KHOẢN =====
+    # Form kiểm tra dữ liệu và chỉ tạo người dùng thường, sau đó đăng nhập bằng phiên Django.
     if request.user.is_authenticated:
         return redirect("rescue:case-list")
 
@@ -47,28 +49,21 @@ def profile(request):
 
 @login_required
 def collaborator_dashboard(request):
-    if not is_support_operator(request.user) and not request.user.rescue_assignments.filter(is_active=True).exists():
+    # Quản trị viên cứu hộ xem ca được giao; quyền đọc hộp thư hỗ trợ được kiểm tra riêng.
+    can_handle_support = is_support_operator(request.user)
+    if not request.user.is_active or not (
+        can_handle_support
+        or is_rescue_moderator(request.user)
+        or request.user.rescue_assignments.filter(is_active=True).exists()
+    ):
         raise PermissionDenied("Bạn chưa được phân công vào ca cứu hộ nào.")
     active_statuses = (
         RescueCase.Status.REPORTED,
         RescueCase.Status.VERIFIED,
         RescueCase.Status.ASSIGNED,
         RescueCase.Status.IN_PROGRESS,
+        RescueCase.Status.PENDING_REVIEW,
     )
-    conversations = SupportConversation.objects.annotate(
-        unread_count=Count(
-            "messages",
-            filter=Q(
-                messages__sender_role=SupportMessage.SenderRole.USER,
-                messages__is_read_by_admin=False,
-            ),
-        )
-    )
-    if not request.user.is_superuser:
-        conversations = conversations.filter(
-            Q(assigned_to__isnull=True) | Q(assigned_to=request.user)
-        )
-
     cases = RescueCase.objects.all()
     if not is_rescue_admin(request.user):
         cases = cases.filter(assignments__assignee=request.user, assignments__is_active=True).distinct()
@@ -82,17 +77,33 @@ def collaborator_dashboard(request):
             if is_rescue_admin(request.user)
             else cases.filter(status__in=active_statuses).count()
         ),
-        "open_conversation_count": conversations.exclude(
-            status=SupportConversation.Status.CLOSED
-        ).count(),
-        "unread_message_count": SupportMessage.objects.filter(
-            conversation__in=conversations,
-            sender_role=SupportMessage.SenderRole.USER,
-            is_read_by_admin=False,
-        ).count(),
         "recent_notifications": available_notifications(request.user)[:8],
-        "recent_conversations": conversations.select_related("user").order_by(
-            "-last_message_at"
-        )[:6],
     }
+    if can_handle_support:
+        conversations = SupportConversation.objects.annotate(
+            unread_count=Count(
+                "messages",
+                filter=Q(
+                    messages__sender_role=SupportMessage.SenderRole.USER,
+                    messages__is_read_by_admin=False,
+                ),
+            )
+        )
+        if not request.user.is_superuser:
+            conversations = conversations.filter(
+                Q(assigned_to__isnull=True) | Q(assigned_to=request.user)
+            )
+        context.update({
+            "open_conversation_count": conversations.exclude(
+                status=SupportConversation.Status.CLOSED
+            ).count(),
+            "unread_message_count": SupportMessage.objects.filter(
+                conversation__in=conversations,
+                sender_role=SupportMessage.SenderRole.USER,
+                is_read_by_admin=False,
+            ).count(),
+            "recent_conversations": conversations.select_related("user").order_by(
+                "-last_message_at"
+            )[:6],
+        })
     return render(request, "accounts/collaborator_dashboard.html", context)

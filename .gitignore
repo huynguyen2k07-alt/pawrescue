@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 __pycache__/
@@ -10,3 +12,4 @@ staticfiles/
 *.bkp
 .vscode/
 .idea/
+output/

@@ -18,6 +18,7 @@
         <div class="paw-admin-hero-actions">
             {% if overview.can_manage_cases %}<a class="paw-admin-button paw-admin-button-primary" href="{% url 'admin:rescue_rescuecase_changelist' %}?status__exact=reported">Tiếp nhận tin báo</a>{% endif %}
             {% if overview.can_support %}<a class="paw-admin-button" href="{% url 'support:inbox' %}">Mở hộp thư{% if overview.pending_support_count %} · {{ overview.pending_support_count }} chờ trả lời{% endif %}</a>{% endif %}
+            {% if user.is_superuser %}<a class="paw-admin-button" href="{% url 'admin:rescue_communityfeedback_changelist' %}">Hộp thư góp ý</a>{% endif %}
         </div>
     </section>
 
@@ -30,7 +31,7 @@
     <section class="paw-metric-grid" aria-label="Công việc cần theo dõi">
         {% if overview.can_manage_cases %}
             <a href="{% url 'admin:rescue_rescuecase_changelist' %}?status__exact=reported"><span class="paw-metric-icon paw-metric-safety">!</span><div><strong>{{ overview.reported_case_count }}</strong><small>Chờ tiếp nhận</small></div></a>
-            <a href="{% url 'admin:rescue_rescuecase_changelist' %}?status__in=verified,assigned,in_progress"><span class="paw-metric-icon paw-metric-rescue">↗</span><div><strong>{{ overview.in_progress_case_count }}</strong><small>Đang xử lý</small></div></a>
+            <a href="{% url 'admin:rescue_rescuecase_changelist' %}?status__in=verified,assigned,in_progress,pending_review"><span class="paw-metric-icon paw-metric-rescue">↗</span><div><strong>{{ overview.in_progress_case_count }}</strong><small>Đang xử lý</small></div></a>
             <a href="{% url 'admin:rescue_rescuecase_changelist' %}?status__in=rescued,closed,cancelled"><span class="paw-metric-icon paw-metric-rescue">✓</span><div><strong>{{ overview.completed_case_count }}</strong><small>Đã chốt</small></div></a>
         {% endif %}
         {% if overview.can_support %}<a href="{% url 'support:inbox' %}"><span class="paw-metric-icon paw-metric-chat">C</span><div><strong>{{ overview.pending_support_count }}</strong><small>Hội thoại chờ trả lời</small></div></a>{% endif %}

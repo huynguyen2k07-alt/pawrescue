@@ -18,6 +18,7 @@ SECRET_KEY = "pawrescue-test-key-not-for-production"
 DEBUG = False
 ALLOWED_HOSTS = ["testserver", "127.0.0.1", "localhost"]
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+GEOAPIFY_API_KEY = ""
 
 _TEST_MEDIA_BASE = Path(os.getenv("PAWRESCUE_TEST_MEDIA", "/tmp/pawrescue-test-media"))
 MEDIA_ROOT = _TEST_MEDIA_BASE / "public"
