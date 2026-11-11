@@ -19,6 +19,7 @@
                     <div><dt>Họ và tên</dt><dd>{{ user.full_name|default:"Chưa cập nhật" }}</dd></div>
                     <div><dt>Email</dt><dd>{{ user.email }}</dd></div>
                     <div><dt>Điện thoại</dt><dd>{{ user.phone|default:"Chưa cập nhật" }}</dd></div>
+                    <div><dt>Vai trò</dt><dd>{% if user.is_superuser %}Admin chính{% else %}{{ user.get_role_display }}{% endif %}</dd></div>
                 </dl>
             </div>
         </section>
@@ -37,7 +38,7 @@
             <a href="{% url 'rescue:my-cases' %}"><span aria-hidden="true">↗</span><strong>Tin báo của tôi</strong><small>Theo dõi các tin đã gửi</small></a>
             {% if user.is_superuser %}<a href="{% url 'admin:rescue_rescuecase_changelist' %}"><span aria-hidden="true">↗</span><strong>Quản lý tin báo</strong><small>Kiểm tra, liên hệ và điều phối cứu hộ</small></a>{% elif rescue_has_workspace %}<a href="{% url 'collaborators:dashboard' %}"><span aria-hidden="true">↗</span><strong>Ca được giao</strong><small>Mở ca và cập nhật hiện trường</small></a>{% endif %}
             <a href="{% url 'rescue:notification-list' %}"><span aria-hidden="true">↗</span><strong>Thông báo</strong><small>{{ unread_notification_count }} cập nhật chưa đọc</small></a>
-            <a href="{% url 'rescue:case-create' %}"><span aria-hidden="true">↗</span><strong>Gửi tin báo mới</strong><small>Gửi thông tin và vị trí cho quản trị viên</small></a>
+            <a href="{% url 'rescue:case-create' %}"><span aria-hidden="true">↗</span><strong>Gửi tin báo mới</strong><small>Gửi thông tin và vị trí cho admin</small></a>
             <a href="{% url 'rescue:case-map' %}"><span aria-hidden="true">↗</span><strong>Bản đồ cứu hộ</strong><small>Xem vị trí các ca cứu hộ</small></a>
         </nav>
     </div>

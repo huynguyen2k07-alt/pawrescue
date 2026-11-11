@@ -280,7 +280,7 @@ class NotificationLiveTests(TestCase):
 
     def test_safe_local_and_same_origin_targets_return_local_urls(self):
         for target, expected in (
-            ("/support/inbox/?conversation=3#reply", "/support/inbox/?conversation=3#reply"),
+            ("/notifications/?filter=unread#list", "/notifications/?filter=unread#list"),
             ("http://testserver/notifications/?filter=unread", "/notifications/?filter=unread"),
         ):
             with self.subTest(target=target):
@@ -307,10 +307,10 @@ class NotificationLiveTests(TestCase):
                          reverse("rescue:case-detail", args=(self.case.pk,)))
 
     def test_https_target_must_match_https_request_origin(self):
-        item = self.notification(target_url="https://testserver/support/inbox/")
+        item = self.notification(target_url="https://testserver/notifications/")
         response = self.client.get(self.url, secure=True)
-        self.assertEqual(response.json()["items"][0]["url"], "/support/inbox/")
-        item.target_url = "http://testserver/support/inbox/"
+        self.assertEqual(response.json()["items"][0]["url"], "/notifications/")
+        item.target_url = "http://testserver/notifications/"
         item.save(update_fields=("target_url",))
         response = self.client.get(self.url, secure=True)
         self.assertEqual(response.json()["items"][0]["url"], reverse("rescue:notification-list"))
@@ -331,7 +331,7 @@ class NotificationLiveTests(TestCase):
             conversation=conversations[0], sender=self.admin,
             sender_role=SupportMessage.SenderRole.ADMIN, body="Phản hồi chưa đọc của người dùng.",
         )
-        for user, expected in ((self.admin, 3), (self.operator, 2), (self.moderator, 0), (self.member, 0)):
+        for user, expected in ((self.admin, 3), (self.operator, 1), (self.moderator, 0), (self.member, 0)):
             with self.subTest(role=user.role, admin=user.is_superuser):
                 self.assertEqual(self.state(user).json()["support_unread_count"], expected)
         initial = self.state(self.admin).json()

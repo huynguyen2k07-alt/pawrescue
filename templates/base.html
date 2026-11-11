@@ -11,6 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261102-3">
     {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'css/notifications-live.css' %}?v=20261101-1">{% endif %}
+    {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'css/support-case-chat.css' %}?v=20261110-1">{% endif %}
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% if request.resolver_match.namespace == 'donations' %}theme-donation{% elif request.resolver_match.url_name == 'knowledge-list' or request.resolver_match.url_name == 'knowledge-detail' %}theme-knowledge{% elif request.resolver_match.url_name == 'team' %}theme-team{% else %}theme-rescue{% endif %}">
@@ -131,11 +132,11 @@
         </div>
         <div class="container footer-bottom"><span>© {% now "Y" %} PawRescue</span><span>Được xây dựng vì động vật và cộng đồng.</span></div>
     </footer>
-    {% if user.is_authenticated and not support_is_operator %}
+    {% if user.is_authenticated %}
         {% include "support/_widget.html" %}
     {% endif %}
     <script defer src="{% static 'js/motion.js' %}?v=20260928-4"></script>
-    <script defer src="{% static 'js/support-chat.js' %}?v=20261027-1"></script>
+    <script defer src="{% static 'js/support-chat.js' %}?v=20261110-1"></script>
     {% if user.is_authenticated %}
         {% include "rescue/_live_notifications.html" %}
         <script defer src="{% static 'js/notifications-live.js' %}?v=20261102-1"></script>

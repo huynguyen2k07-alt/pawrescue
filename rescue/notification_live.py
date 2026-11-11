@@ -44,12 +44,12 @@ def notification_destination(notification, request):
 
 
 def _serialize_items(queryset, request):
-    fields = ("pk", "kind", "title", "is_read", "created_at", "target_url", "rescue_case_id")
+    fields = ("pk", "kind", "display_title", "is_read", "created_at", "target_url", "rescue_case_id")
     return [
         {
             "id": item["pk"],
             "kind": item["kind"],
-            "title": item["title"],
+            "title": item["display_title"],
             "is_read": item["is_read"],
             "created_at": item["created_at"].isoformat(),
             "url": notification_destination(item, request),

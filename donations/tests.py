@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from organizations.models import OrganizationMembership, RescueOrganization
-from rescue.models import Notification, RescueCase
+from rescue.models import Notification, RescueAssignment, RescueCase
 
 from .forms import DonationForm
 from .models import CampaignExpense, Donation, FundraisingCampaign
@@ -144,6 +144,10 @@ class FundraisingWorkflowTests(TestCase):
         self.assertEqual(response.context["campaign"].balance_amount, Decimal("500000"))
 
     def test_manager_can_create_campaign_for_rescue_case(self):
+        RescueAssignment.objects.create(
+            rescue_case=self.rescue_case,
+            assignee=self.manager,
+        )
         self.client.force_login(self.manager)
 
         response = self.client.post(

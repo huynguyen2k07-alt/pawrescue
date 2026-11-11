@@ -8,8 +8,9 @@
     <div class="page-intro">
         <span class="eyebrow eyebrow-dark">Trao đổi riêng · Tin báo #{{ case.pk }}</span>
         <h1>{{ case.title }}</h1>
-        <p>Trao đổi với admin hoặc người được giao xử lý ca. Mỗi người chỉ thấy tin mình gửi hoặc nhận.</p>
+        <p>Trao đổi riêng giữa admin chính và cộng tác viên được giao ca. Mỗi người chỉ thấy tin mình gửi hoặc nhận.</p>
     </div>
+    <p><a class="button button-primary" href="{% url 'rescue:case-messages' case.pk %}" data-case-chat-url="{% url 'rescue:case-messages' case.pk %}" data-case-chat-title="Ca #{{ case.pk }}">Mở trong khung chat góc dưới</a></p>
     <div class="panel detail-panel private-case-messages" aria-label="Tin nhắn điều phối">{# Trao đổi riêng theo ca: mỗi người chỉ xem được tin mình gửi hoặc nhận. #}
         {% for item in private_messages %}
             <article class="private-case-message{% if item.sender_id == user.pk %} is-own{% endif %}">
@@ -29,7 +30,7 @@
             {% for field in form %}<div class="field">{{ field.label_tag }}{{ field }}{% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}</div>{% endfor %}
             <button class="button button-primary" type="submit">Gửi tin nhắn</button>
         {% else %}
-            <p>Chưa có quản trị viên khác hoặc người được phân công đang hoạt động để nhận tin.</p>
+            <p>Chưa có admin chính hoặc cộng tác viên được phân công đang hoạt động để nhận tin.</p>
         {% endif %}
     </form>
 </section>

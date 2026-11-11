@@ -215,8 +215,11 @@ def campaign_create(request):
                     {
                         "organization": rescue_case.organization,
                         "rescue_case": rescue_case,
-                        "title": f"Chung tay hỗ trợ: {rescue_case.title}",
-                        "description": rescue_case.description,
+                        "title": f"Chung tay hỗ trợ ca cứu hộ #{rescue_case.pk}",
+                        "description": (
+                            f"Hỗ trợ cứu hộ {rescue_case.get_animal_type_display().lower()} tại Đà Nẵng. "
+                            "Nội dung chiến dịch công khai không kèm thông tin liên hệ hoặc địa chỉ riêng của người báo tin."
+                        ),
                         "transfer_content": f"CUUHO {rescue_case.pk}",
                     }
                 )

@@ -34,7 +34,7 @@ function virtualClock() {
     };
 }
 
-function position(latitude = 16.08, longitude = 108.23, accuracy = 30) {
+function position(latitude = 16.08, longitude = 108.23, accuracy = 10) {
     return { coords: { latitude, longitude, accuracy } };
 }
 
@@ -580,7 +580,7 @@ test("redisplaying an otherwise invalid form preserves a checked valid pin but r
     assert.equal(incomplete.marker(), undefined);
 });
 
-test("one click tries a recent fast fix and a fresh precise watch without locking the button", () => {
+test("one click requests fresh high-accuracy positions from the beginning without locking the button", () => {
     const ui = picker();
     const button = ui.inputs["use-current-location"];
     button.fire("click");
@@ -588,9 +588,9 @@ test("one click tries a recent fast fix and a fresh precise watch without lockin
     assert.equal(button.textContent, "Hủy lấy vị trí");
     assert.equal(button["aria-busy"], "true");
     assert.equal(ui.requests.length, 1);
-    assert.equal(ui.requests[0].options.enableHighAccuracy, false);
-    assert.equal(ui.requests[0].options.timeout, 3000);
-    assert.equal(ui.requests[0].options.maximumAge, 10000);
+    assert.equal(ui.requests[0].options.enableHighAccuracy, true);
+    assert.equal(ui.requests[0].options.timeout, 15000);
+    assert.equal(ui.requests[0].options.maximumAge, 0);
     assert.equal(ui.watches.length, 1);
     assert.equal(ui.watches[0].options.enableHighAccuracy, true);
     assert.equal(ui.watches[0].options.timeout, 15000);
@@ -598,7 +598,7 @@ test("one click tries a recent fast fix and a fresh precise watch without lockin
     ui.requests[0].success(position());
     assert.equal(ui.inputs.id_latitude.value, "16.080000");
     assert.equal(ui.marker().getLatLng().lng, 108.23);
-    assert.match(ui.inputs["location-status"].textContent, /Sai số ước tính khoảng 30 m/i);
+    assert.match(ui.inputs["location-status"].textContent, /Sai số ước tính khoảng 10 m/i);
     assert.equal(button.textContent, "Dùng vị trí hiện tại");
     assert.equal(button["aria-busy"], "false");
     assert.deepEqual(ui.clearedWatches, [0]);
@@ -625,16 +625,50 @@ test("a credible coarse fix appears immediately and only better fixes move the p
     assert.equal(ui.activeWatches.size, 0);
 });
 
-test("a precise watch result can win before the fast request and late callbacks cannot overwrite it", () => {
+test("a precise watch result can win before the initial request and late callbacks cannot overwrite it", () => {
     const ui = picker();
     ui.inputs["use-current-location"].fire("click");
-    ui.watches[0].success(position(16.06, 108.21, 40));
+    ui.watches[0].success(position(16.06, 108.21, 8));
     ui.requests[0].success(position(16.09, 108.24, 10));
     ui.requests[0].failure({ code: 1 });
     ui.watches[0].success(position(16.09, 108.24, 10));
     assert.equal(ui.inputs.id_latitude.value, "16.060000");
-    assert.match(ui.inputs["location-status"].textContent, /40 m/);
+    assert.match(ui.inputs["location-status"].textContent, /8 m/);
     assert.equal(ui.clock.pending(), 0);
+});
+
+test("a 40 metre fix stays open for refinement and uses the more precise device pair unchanged", () => {
+    const ui = picker();
+    ui.inputs["use-current-location"].fire("click");
+    ui.requests[0].success(position(16.05, 108.20, 40));
+    assert.equal(ui.inputs.id_latitude.value, "16.050000");
+    assert.equal(ui.inputs["use-current-location"]["aria-busy"], "true");
+    assert.equal(ui.activeWatches.size, 1);
+
+    ui.watches[0].success(position(16.061234, 108.219876, 8));
+    assert.equal(ui.inputs.id_latitude.value, "16.061234");
+    assert.equal(ui.inputs.id_longitude.value, "108.219876");
+    assert.equal(ui.marker().getLatLng().lat, 16.061234);
+    assert.equal(ui.marker().getLatLng().lng, 108.219876);
+    assert.match(ui.inputs["location-status"].textContent, /Sai số ước tính khoảng 8 m/);
+    assert.equal(ui.inputs.id_location_confirmed.checked, false);
+    assert.equal(ui.activeWatches.size, 0);
+    assert.equal(ui.clock.pending(), 0);
+});
+
+test("the deadline retains a 40 metre device fix with its real accuracy when no better fix arrives", () => {
+    const ui = picker();
+    ui.inputs["use-current-location"].fire("click");
+    ui.requests[0].success(position(16.05, 108.20, 40));
+    ui.watches[0].success(position(16.09, 108.24, 400));
+    ui.clock.tick(15000);
+    assert.equal(ui.inputs.id_latitude.value, "16.050000");
+    assert.equal(ui.inputs.id_longitude.value, "108.200000");
+    assert.match(ui.inputs["location-status"].textContent, /Sai số ước tính khoảng 40 m/);
+    assert.equal(ui.inputs["use-current-location"]["aria-busy"], "false");
+    assert.equal(ui.activeWatches.size, 0);
+    ui.watches[0].success(position(16.09, 108.24, 5));
+    assert.equal(ui.inputs.id_latitude.value, "16.050000");
 });
 
 test("an unanswered permission prompt gets time to be accepted and is eventually canceled", () => {
@@ -655,7 +689,7 @@ test("an unanswered permission prompt gets time to be accepted and is eventually
     assert.equal(ui.clock.pending(), 0);
 });
 
-test("granted permission bounds fresh acquisition to fifteen seconds without waiting for a failed fast phase", async () => {
+test("granted permission bounds fresh acquisition to fifteen seconds without waiting for the initial request", async () => {
     const ui = picker({ permission: "granted" });
     const button = ui.inputs["use-current-location"];
     button.fire("click");
@@ -737,7 +771,7 @@ test("rejected or throwing permission queries safely fall back to browser geoloc
     }
 });
 
-test("a failed or timed-out fast attempt does not discard the running precise lookup", () => {
+test("a failed or timed-out initial attempt does not discard the running precise lookup", () => {
     for (const code of [2, 3]) {
         const ui = picker();
         ui.inputs["use-current-location"].fire("click");
@@ -927,7 +961,7 @@ test("an accurate later result replaces a preview and clears its uncertainty cir
     ui.requests[0].success(position(16.08, 108.23, 2500));
     assert.equal(ui.inputs.id_latitude.value, "");
     assert.equal(ui.map.circles.size, 1);
-    ui.watches[0].success(position(16.06, 108.21, 40));
+    ui.watches[0].success(position(16.06, 108.21, 8));
     assert.equal(ui.inputs.id_latitude.value, "16.060000");
     assert.equal(ui.inputs.id_longitude.value, "108.210000");
     assert.equal(ui.map.markers.size, 1);
@@ -1088,9 +1122,9 @@ test("a Leaflet initialization error leaves GPS and manual coordinates usable", 
         ui.inputs.id_longitude.fire("input");
         assert.match(ui.inputs["location-summary"].textContent, /16.050000, 108.200000/);
         ui.inputs["use-current-location"].fire("click");
-        assert.equal(ui.requests.length, 1, `${mapError}: one fast request per click`);
+        assert.equal(ui.requests.length, 1, `${mapError}: one fresh request per click`);
         assert.equal(ui.watches.length, 1, `${mapError}: one precise lookup per click`);
-        ui.requests[0].success(position(16.09, 108.24, 30));
+        ui.requests[0].success(position(16.09, 108.24, 10));
         assert.equal(ui.inputs.id_latitude.value, "16.090000");
         assert.equal(ui.inputs.id_longitude.value, "108.240000");
         assert.equal(ui.inputs["use-current-location"]["aria-busy"], "false");

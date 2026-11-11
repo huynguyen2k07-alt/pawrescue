@@ -10,12 +10,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import content_disposition_header
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.vary import vary_on_cookie
 
 from accounts.permissions import (
     is_support_operator,
     support_operator_queryset,
-    support_operator_ids,
     support_operator_required,
 )
 from rescue.models import CommunityFeedback, Notification, RescueCase
@@ -32,9 +33,7 @@ from .models import (
 
 
 def _operator_ids(conversation):
-    # Khi đã phân người phụ trách, thông báo hỗ trợ chỉ gửi cho người đó và quản trị viên cao nhất.
-    if conversation.assigned_to_id is None:
-        return support_operator_ids(get_user_model())
+    # Hội thoại chưa được giao chỉ báo admin chính; nhân sự khác chỉ nhận phần được phân công.
     return support_operator_queryset(get_user_model()).filter(
         Q(is_superuser=True) | Q(pk=conversation.assigned_to_id)
     ).values_list("pk", flat=True)
@@ -91,17 +90,14 @@ def _notification_preview(chat_message, attachment_count):
 
 
 def _operator_can_access_conversation(user, conversation):
-    return user.is_superuser or conversation.assigned_to_id in {
-        None,
-        user.pk,
-    }
+    return user.is_superuser or conversation.assigned_to_id == user.pk
 
 
 def _operator_conversation_queryset(user):
     queryset = SupportConversation.objects.select_related("user", "assigned_to")
     if user.is_superuser:
         return queryset
-    return queryset.filter(Q(assigned_to__isnull=True) | Q(assigned_to=user))
+    return queryset.filter(assigned_to=user)
 
 
 def _case_for_conversation(user, conversation, case_id):
@@ -198,7 +194,7 @@ def attachment(request, pk):
         False,
         item.original_name,
     )
-    response.headers["Cache-Control"] = "private, max-age=3600"
+    response.headers["Cache-Control"] = "private, no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
 
@@ -220,6 +216,8 @@ def _serialize_conversation(conversation):
     }
 
 
+@never_cache
+@vary_on_cookie
 @require_GET
 @login_required
 def chat_state(request):
@@ -269,6 +267,8 @@ def chat_state(request):
     )
 
 
+@never_cache
+@vary_on_cookie
 @require_POST
 @login_required
 def chat_send(request):
@@ -333,6 +333,8 @@ def chat_send(request):
     )
 
 
+@never_cache
+@vary_on_cookie
 @support_operator_required
 def inbox(request):
     conversations = _conversation_queryset(request.user)
@@ -430,22 +432,20 @@ def open_case_chat(request, pk):
             .exclude(status=SupportConversation.Status.CLOSED)
             .first()
         )
+        if not request.user.is_superuser and (
+            conversation is None or conversation.assigned_to_id != request.user.pk
+        ):
+            django_messages.info(
+                request,
+                "Admin chính cần giao cuộc trò chuyện này cho bạn trước khi truy cập.",
+            )
+            return redirect(return_url)
         if conversation is None:
             conversation = SupportConversation.objects.create(
                 user_id=rescue_case.reporter_id,
                 assigned_to=request.user,
                 subject=f"Trao đổi về ca #{rescue_case.pk}: {rescue_case.title}"[:180],
             )
-        elif (
-            conversation.assigned_to_id is not None
-            and conversation.assigned_to_id != request.user.pk
-            and not request.user.is_superuser
-        ):
-            django_messages.info(
-                request,
-                "Cuộc trò chuyện này đang được một cộng tác viên khác phụ trách.",
-            )
-            return redirect(return_url)
         elif conversation.assigned_to_id is None:
             conversation.assigned_to = request.user
             conversation.save(update_fields=("assigned_to", "updated_at"))
@@ -460,6 +460,8 @@ def open_case_chat(request, pk):
     )
 
 
+@never_cache
+@vary_on_cookie
 @require_GET
 @support_operator_required
 def inbox_state(request):

@@ -38,7 +38,7 @@
                         </span>
                         <div class="notification-content">
                             <div class="notification-title-row">
-                                <strong><a data-notification-title href="{{ notification.destination_url }}">{{ notification.title }}</a></strong>
+                                <strong><a data-notification-title href="{{ notification.destination_url }}">{{ notification.display_title }}</a></strong>
                                 <time datetime="{{ notification.created_at|date:'c' }}">{{ notification.created_at|timesince }} trước</time>
                             </div>
                             <div class="notification-live-actions">
@@ -50,11 +50,11 @@
                                     <button class="button button-ghost button-small" type="submit">Đánh dấu đã đọc</button>
                                 </form>
                             </div>
-                            <span class="notification-message">{{ notification.message }}</span>
+                            <span class="notification-message">{{ notification.display_message }}</span>
                             <span class="notification-meta">
                                 {% if notification.rescue_case %}Ca #{{ notification.rescue_case_id }} · {{ notification.rescue_case.title }}{% elif notification.kind == 'donation_submitted' or notification.kind == 'donation_reviewed' %}Quỹ cứu hộ{% else %}Thông báo hệ thống{% endif %}
                                 {% if notification.actor %}
-                                    · bởi {{ notification.actor.full_name|default:notification.actor.email }}
+                                    · {% if notification.actor.is_superuser %}Admin chính{% else %}Đội hỗ trợ{% endif %}
                                 {% endif %}
                             </span>
                         </div>

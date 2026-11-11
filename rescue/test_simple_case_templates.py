@@ -10,7 +10,7 @@ from django.urls import reverse
 
 from organizations.models import RescueOrganization
 
-from .models import RescueCase
+from .models import RescueAssignment, RescueCase
 
 
 class _CaseMarkup(HTMLParser):
@@ -66,6 +66,11 @@ class SimpleCaseTemplateTests(TestCase):
         )
 
     def test_admin_workspace_keeps_real_actions_and_collapses_long_forms(self):
+        helper = get_user_model().objects.create_user(
+            email="simple-workspace-helper@example.invalid", password="test-password",
+            role=get_user_model().Role.MODERATOR,
+        )
+        RescueAssignment.objects.create(rescue_case=self.case, assignee=helper, assigned_by=self.admin)
         self.client.force_login(self.admin)
         response = self.client.get(reverse("rescue:case-detail", args=(self.case.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -76,7 +81,10 @@ class SimpleCaseTemplateTests(TestCase):
         self.assertEqual(actions[reverse("support:open-case-chat", args=(self.case.pk,))], "post")
         self.assertContains(response, 'id="case-complete"')
         self.assertContains(response, "Xử lý thành công")
-        self.assertContains(response, "Gửi ca cho các quản trị viên")
+        self.assertContains(response, "Gửi ca cho các cộng tác viên cứu hộ")
+        self.assertContains(response, f'data-case-chat-url="{reverse("rescue:case-messages", args=(self.case.pk,))}"')
+        self.assertContains(response, f'data-case-chat-title="Ca #{self.case.pk}"')
+        self.assertContains(response, 'data-support-operator="true"')
         for element_id in ("case-review", "case-handoff", "case-assign", "case-history"):
             self.assertNotIn("open", markup.details[element_id])
         self.assertContains(response, reverse("admin:rescue_rescuecase_change", args=(self.case.pk,)) + "?edit=1")
@@ -93,7 +101,8 @@ class SimpleCaseTemplateTests(TestCase):
         self.assertNotContains(response, 'id="case-review"')
         self.assertNotContains(response, 'id="case-handoff"')
         self.assertNotContains(response, 'id="case-complete"')
-        self.assertNotContains(response, "Gửi ca cho các quản trị viên")
+        self.assertNotContains(response, "Gửi ca cho các cộng tác viên cứu hộ")
+        self.assertNotContains(response, "data-case-chat-url=")
         self.assertNotContains(response, reverse("admin:rescue_rescuecase_delete", args=(self.case.pk,)))
         self.assertContains(response, f'href="{reverse("rescue:knowledge-list")}"')
         self.assertContains(response, f'href="{reverse("rescue:team")}"')

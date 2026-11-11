@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Hộp thư cộng tác viên · PawRescue{% endblock %}
+{% block title %}Hộp thư được giao · PawRescue{% endblock %}
 {% block extra_head %}
     <link rel="stylesheet" href="{% static 'admin/css/pawrescue_admin.css' %}?v=20261028-3">
     <link rel="stylesheet" href="{% static 'css/collaborator.css' %}?v=20261028-3">
@@ -11,8 +11,8 @@
 <section class="section collaborator-inbox-shell">
 <div class="container">
     <div class="support-inbox-heading">
-        <div><span class="paw-admin-eyebrow">Hỗ trợ người dùng</span><h1>Hộp thư PawRescue</h1><p>Đọc, nhận phụ trách và phản hồi các cuộc trò chuyện từ cộng đồng.</p></div>
-        <a href="{% url 'collaborators:dashboard' %}">← Không gian cộng tác viên</a>
+        <div><span class="paw-admin-eyebrow">Hỗ trợ người dùng</span><h1>Hộp thư PawRescue</h1><p>Đọc và phản hồi các cuộc trò chuyện được admin giao.</p></div>
+        <a href="{% url 'collaborators:dashboard' %}">← Khu vực làm việc</a>
     </div>
 
     <div class="support-inbox-layout" data-support-inbox data-state-url="{% url 'support:inbox-state' %}" data-selected-id="{% if selected_conversation %}{{ selected_conversation.pk }}{% endif %}">
@@ -67,7 +67,7 @@
                         <div><div class="support-admin-file-control"><input id="id_support_attachments" name="attachments" type="file" accept=".jpg,.jpeg,.png,.webp,.mp4,.webm,.mov" multiple data-admin-file-input><label for="id_support_attachments">＋ Thêm ảnh/video</label><small>Tối đa 4 tệp · Ảnh 8 MB · Video 40 MB</small></div><button type="submit">Gửi trả lời</button></div>
                     </form>
                 {% else %}<div class="support-thread-closed">Cuộc trò chuyện đã đóng. Bạn có thể mở lại nếu người dùng chưa có cuộc trò chuyện khác đang hoạt động.</div>{% endif %}
-            {% else %}<div class="support-thread-placeholder"><span>💬</span><h2>Chưa có tin nhắn hỗ trợ</h2><p>Các cuộc trò chuyện mới từ người dùng sẽ xuất hiện tại đây.</p></div>{% endif %}
+            {% else %}<div class="support-thread-placeholder"><span>💬</span><h2>Chưa có cuộc trò chuyện được giao</h2><p>Admin chính sẽ giao các cuộc trò chuyện cần bạn hỗ trợ.</p></div>{% endif %}
         </section>
     </div>
 </div>

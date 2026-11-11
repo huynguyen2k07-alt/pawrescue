@@ -1,6 +1,5 @@
 from django import forms
 from django.contrib import admin
-from django.db.models import Q
 from django.urls import reverse
 from django.utils.html import format_html
 
@@ -48,10 +47,7 @@ class SupportVisibilityAdminMixin:
         if not is_support_operator(request.user):
             return queryset.none()
         prefix = self.conversation_lookup
-        return queryset.filter(
-            Q(**{prefix + "assigned_to__isnull": True})
-            | Q(**{prefix + "assigned_to_id": request.user.pk})
-        )
+        return queryset.filter(**{prefix + "assigned_to_id": request.user.pk})
 
 
 class SupportMessageInline(admin.TabularInline):
@@ -92,9 +88,15 @@ class SupportConversationAdmin(SupportVisibilityAdminMixin, admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         fields = super().get_readonly_fields(request, obj)
+        if not request.user.is_superuser:
+            fields += ("assigned_to",)
         if obj:
             fields += ("user", "status")
         return fields
+
+    def has_add_permission(self, request):
+        # Nhân sự hỗ trợ không được tự tạo/phân hội thoại để đọc thông tin người dùng khác.
+        return request.user.is_superuser and super().has_add_permission(request)
 
     @admin.display(description="Trao đổi và xử lý")
     def inbox_link(self, obj):

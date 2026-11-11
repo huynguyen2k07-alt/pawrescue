@@ -224,7 +224,7 @@ class RescueCaseAdmin(RescueAdminOnlyMixin, admin.ModelAdmin):
     inlines = (RescueCaseImageInline,)
     fieldsets = (
         ("Thông tin yêu cầu", {"fields": ("title", "description", ("animal_type", "urgency"), "animal_details")}),
-        ("Hiện trường và liên hệ", {"fields": ("address", ("latitude", "longitude"), "is_location_private", ("contact_name", "contact_phone"))}),
+        ("Hiện trường và liên hệ riêng tư", {"fields": ("address", ("latitude", "longitude"), ("contact_name", "contact_phone"))}),
         ("Thông tin tiếp nhận", {"classes": ("collapse",), "fields": ("reporter", "organization")}),
     )
 

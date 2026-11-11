@@ -1,13 +1,18 @@
+from types import SimpleNamespace
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
+from django.views.decorators.vary import vary_on_cookie
 
 from rescue.models import RescueCase
 from rescue.permissions import visible_cases_for
+from rescue.privacy import present_case
 
 from .forms import (
     AddOrganizationMemberForm,
@@ -63,10 +68,12 @@ def _owner_or_forbidden(user, organization):
     )
 
 
+@never_cache
+@vary_on_cookie
 @login_required
 def dashboard(request):
     if getattr(request.user, "is_moderator", False) and not request.user.is_superuser:
-        return HttpResponseForbidden("Quản trị viên cứu hộ chỉ xử lý các ca được admin giao.")
+        return HttpResponseForbidden("Cộng tác viên cứu hộ chỉ xử lý các ca được admin giao.")
     memberships = OrganizationMembership.objects.filter(
         user=request.user,
         is_active=True,
@@ -116,7 +123,7 @@ def dashboard(request):
 
     context = {
         "organizations": organization_list,
-        "cases": cases,
+        "cases": [present_case(request.user, case) for case in cases],
         "can_manage_organization_features": (
             request.user.is_superuser
             or memberships.filter(
@@ -130,10 +137,12 @@ def dashboard(request):
     return render(request, "organizations/dashboard.html", context)
 
 
+@never_cache
+@vary_on_cookie
 @login_required
 def organization_create(request):
     if getattr(request.user, "is_moderator", False) and not request.user.is_superuser:
-        return HttpResponseForbidden("Quản trị viên cứu hộ không có quyền tạo tổ chức.")
+        return HttpResponseForbidden("Cộng tác viên cứu hộ không có quyền tạo tổ chức.")
     if request.method == "POST":
         form = RescueOrganizationForm(request.POST)
         if form.is_valid():
@@ -167,6 +176,8 @@ def organization_create(request):
     )
 
 
+@never_cache
+@vary_on_cookie
 @login_required
 def organization_detail(request, pk):
     organization = get_object_or_404(RescueOrganization, pk=pk, is_active=True)
@@ -175,17 +186,31 @@ def organization_detail(request, pk):
         return forbidden
 
     memberships = organization.memberships.filter(is_active=True).select_related("user")
+    can_view_member_contacts = _is_owner(request.user, organization, membership)
+    member_rows = [
+        SimpleNamespace(
+            pk=item.pk,
+            user_id=item.user_id,
+            role=item.role,
+            display_name=item.user.full_name.strip() or "Thành viên",
+            display_email=(
+                item.user.email if can_view_member_contacts or item.user_id == request.user.pk else ""
+            ),
+            get_role_display=lambda label=item.get_role_display(): label,
+        )
+        for item in memberships
+    ]
     cases = visible_cases_for(
         request.user,
-        organization.rescue_cases.select_related("reporter")
+        organization.rescue_cases.select_related("organization", "reporter")
         .prefetch_related("images", "assignments__assignee")
         .all(),
     )
     context = {
         "organization": organization,
         "membership": membership,
-        "memberships": memberships,
-        "cases": cases,
+        "memberships": member_rows,
+        "cases": [present_case(request.user, case) for case in cases],
         "can_manage_members": (
             not organization.is_system
             and _is_owner(request.user, organization, membership)
@@ -196,6 +221,8 @@ def organization_detail(request, pk):
     return render(request, "organizations/organization_detail.html", context)
 
 
+@never_cache
+@vary_on_cookie
 @login_required
 def organization_update(request, pk):
     organization = get_object_or_404(RescueOrganization, pk=pk, is_active=True)
@@ -225,6 +252,8 @@ def organization_update(request, pk):
     )
 
 
+@never_cache
+@vary_on_cookie
 @require_POST
 @login_required
 def member_add(request, pk):
@@ -261,6 +290,8 @@ def member_add(request, pk):
     return redirect("organizations:organization-detail", pk=pk)
 
 
+@never_cache
+@vary_on_cookie
 @require_POST
 @login_required
 def member_change_role(request, pk, membership_pk):
@@ -303,6 +334,8 @@ def member_change_role(request, pk, membership_pk):
     return redirect("organizations:organization-detail", pk=pk)
 
 
+@never_cache
+@vary_on_cookie
 @require_POST
 @login_required
 def member_remove(request, pk, membership_pk):

@@ -146,12 +146,12 @@
         return value.trim() === "" ? NaN : Number(value);
     }
 
-    // ===== CHỨC NĂNG CHÍNH: LẤY VỊ TRÍ NHANH VÀ CÓ THỂ HỦY =====
-    // Một lần bấm lấy vị trí nhanh và tinh chỉnh ghim theo sai số; dừng theo dõi khi hủy hoặc chọn thủ công.
+    // ===== CHỨC NĂNG CHÍNH: LẤY VỊ TRÍ THIẾT BỊ VÀ CÓ THỂ HỦY =====
+    // Luôn xin vị trí mới ở chế độ chính xác cao; giữ kết quả có sai số nhỏ nhất, không tự sửa tọa độ thiết bị.
     function bindLocationButton(button, feedback, onLocation, fallbackHint, acceptsLocation, onApproximate) {
         const permissionTimeout = 30000;
         const acquisitionTimeout = 15000;
-        const targetAccuracy = 50;
+        const targetAccuracy = 10;
         const maximumAccuracy = 1000;
         const initialLabel = button.textContent;
         let currentRequest = null;
@@ -205,7 +205,7 @@
                 timer: null, watchId: null, preciseStarted: false, acquiring: false,
                 permission: null, permissionHandler: null, candidate: null,
                 selectionText: "", outsideArea: false, approximate: null,
-                fastError: null, preciseError: null, lastError: null,
+                initialError: null, preciseError: null, lastError: null,
             };
             currentRequest = request;
             button.textContent = "Hủy lấy vị trí";
@@ -273,16 +273,16 @@
                     return;
                 }
                 request.lastError = error && error.code || 2;
-                if (source === "fast") request.fastError = request.lastError;
+                if (source === "initial") request.initialError = request.lastError;
                 if (source === "precise") request.preciseError = request.lastError;
-                if (request.fastError && request.preciseError) {
+                if (request.initialError && request.preciseError) {
                     finish();
                     return;
                 }
                 beginAcquisition();
                 startPrecise();
                 if (isCurrent() && !request.candidate && !request.approximate && request.lastError === 2) {
-                    feedback.textContent = "Máy chưa cung cấp được vị trí. Đang thử nguồn định vị còn lại; bạn vẫn có thể bấm bản đồ để chọn điểm.";
+                    feedback.textContent = "Máy chưa cung cấp được vị trí. Đang tiếp tục yêu cầu vị trí chính xác cao; bạn vẫn có thể bấm bản đồ để chọn điểm.";
                 }
             }
 
@@ -361,11 +361,11 @@
 
             request.timer = window.setTimeout(finish, permissionTimeout);
             try {
-                navigator.geolocation.getCurrentPosition(receive, function (error) { handleError(error, "fast"); }, {
-                    enableHighAccuracy: false, timeout: 3000, maximumAge: 10000,
+                navigator.geolocation.getCurrentPosition(receive, function (error) { handleError(error, "initial"); }, {
+                    enableHighAccuracy: true, timeout: acquisitionTimeout, maximumAge: 0,
                 });
             } catch (error) {
-                handleError({ code: error && error.name === "SecurityError" ? 1 : 2 }, "fast");
+                handleError({ code: error && error.name === "SecurityError" ? 1 : 2 }, "initial");
             }
             if (!isCurrent()) return;
             if (navigator.permissions && typeof navigator.permissions.query === "function") {

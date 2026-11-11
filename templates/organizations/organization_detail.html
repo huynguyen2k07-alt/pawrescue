@@ -45,15 +45,15 @@
             <div class="member-list">
                 {% for item in memberships %}
                     <article class="member-row">
-                        <span class="avatar">{{ item.user.full_name|default:item.user.email|slice:":1"|upper }}</span>
+                        <span class="avatar">{{ item.display_name|slice:":1"|upper }}</span>
                         <div class="member-identity">
-                            <strong>{{ item.user.full_name|default:item.user.email }}</strong>
-                            <span>{{ item.user.email }}{% if item.user_id == user.id %} · Bạn{% endif %}</span>
+                            <strong>{{ item.display_name }}</strong>
+                            {% if item.display_email %}<span>{{ item.display_email }}{% if item.user_id == user.id %} · Bạn{% endif %}</span>{% endif %}
                         </div>
                         {% if can_manage_members %}
                             <form class="role-form" method="post" action="{% url 'organizations:member-change-role' organization.pk item.pk %}">
                                 {% csrf_token %}
-                                <label class="sr-only" for="role-{{ item.pk }}">Vai trò của {{ item.user.email }}</label>
+                                <label class="sr-only" for="role-{{ item.pk }}">Vai trò của {{ item.display_name }}</label>
                                 <select id="role-{{ item.pk }}" name="role">
                                     {% for value, label in role_choices %}
                                         <option value="{{ value }}" {% if item.role == value %}selected{% endif %}>{{ label }}</option>
@@ -63,7 +63,7 @@
                             </form>
                             <form method="post" action="{% url 'organizations:member-remove' organization.pk item.pk %}">
                                 {% csrf_token %}
-                                <button class="member-remove" type="submit" aria-label="Gỡ {{ item.user.email }} khỏi tổ chức">Gỡ</button>
+                                <button class="member-remove" type="submit" aria-label="Gỡ {{ item.display_name }} khỏi tổ chức">Gỡ</button>
                             </form>
                         {% else %}
                             <span class="role-badge">{{ item.get_role_display }}</span>

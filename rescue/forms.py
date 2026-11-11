@@ -66,6 +66,7 @@ class RescueCaseForm(forms.ModelForm):
         self.fields["longitude"].required = True
         # Người báo phải tự kiểm tra hiện trường; GPS gần đúng chưa đủ để điều phối cứu hộ.
         self.fields["location_confirmed"].required = require_location_confirmation
+        self.instance.is_location_private = True
 
     class Meta:
         model = RescueCase
@@ -76,7 +77,6 @@ class RescueCaseForm(forms.ModelForm):
             "urgency",
             "description",
             "address",
-            "is_location_private",
             "latitude",
             "longitude",
             "contact_name",
@@ -89,7 +89,6 @@ class RescueCaseForm(forms.ModelForm):
             "urgency": "Mức độ khẩn cấp",
             "description": "Mô tả tình trạng",
             "address": "Địa chỉ",
-            "is_location_private": "Ẩn vị trí chính xác với người ngoài",
             "latitude": "Vĩ độ",
             "longitude": "Kinh độ",
             "contact_name": "Tên người liên hệ",
@@ -114,7 +113,6 @@ class RescueCaseForm(forms.ModelForm):
                     "placeholder": "Ví dụ: 430 Hùng Vương, Hải Châu, Đà Nẵng",
                 }
             ),
-            "is_location_private": forms.CheckboxInput(),
             "latitude": forms.NumberInput(
                 attrs={"step": "0.000001", "min": "15.85", "max": "16.25"}
             ),

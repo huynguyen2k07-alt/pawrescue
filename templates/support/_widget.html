@@ -4,6 +4,8 @@
     id="support-chat"
     data-state-url="{% url 'support:chat-state' %}"
     data-send-url="{% url 'support:chat-send' %}"
+    data-support-operator="{{ support_is_operator|yesno:'true,false' }}"
+    {% if support_is_operator %}data-support-inbox-url="{% url 'support:inbox' %}"{% endif %}
 >
     <button
         class="support-chat-toggle"
@@ -14,7 +16,7 @@
         aria-controls="support-chat-panel"
     >
         <span class="support-chat-toggle-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M20 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h9a4 4 0 0 1 4 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="support-chat-toggle-copy"><strong>Chat với PawRescue</strong><small>Quản trị viên hỗ trợ</small></span>
+        <span class="support-chat-toggle-copy"><strong data-support-toggle-title>{% if support_is_operator %}Hộp thư PawRescue{% else %}Chat với PawRescue{% endif %}</strong><small data-support-toggle-copy>{% if support_is_operator %}Người dùng và cộng tác viên{% else %}Admin chính hỗ trợ{% endif %}</small></span>
         <span class="support-chat-badge" data-support-badge {% if not support_chat_unread_count %}hidden{% endif %}>{{ support_chat_unread_count }}</span>
     </button>
 
@@ -24,12 +26,21 @@
             <div><strong id="support-chat-title">Hỗ trợ PawRescue</strong><span><i></i><span data-support-status>Sẵn sàng hỗ trợ</span></span></div>
             <button type="button" data-support-close aria-label="Đóng cửa sổ chat">×</button>
         </header>
+        <div class="support-chat-mode-tools" data-support-mode-tools hidden>
+            <button type="button" data-support-default>← Hỗ trợ người dùng</button>
+            <a data-support-full-page>Mở trang trao đổi ↗</a>
+        </div>
+        <p class="support-chat-case-title" data-support-case-title hidden></p>
         <div class="support-chat-messages" data-support-messages aria-live="polite">
             <div class="support-chat-loading"><span></span><span></span><span></span></div>
         </div>
         <p class="support-chat-feedback" data-support-feedback aria-live="polite" hidden></p>
         <form class="support-chat-form" data-support-form method="post" enctype="multipart/form-data">
             {% csrf_token %}
+            <label class="support-chat-recipient" data-case-chat-recipient hidden>
+                Người nhận
+                <select name="recipient" data-case-chat-recipient-select disabled aria-label="Người nhận tin nhắn riêng"></select>
+            </label>
             <div class="support-chat-attachment-preview" data-support-attachment-preview hidden></div>
             <div class="support-chat-compose">
                 <input
@@ -41,7 +52,7 @@
                     multiple
                     data-support-file-input
                 >
-                <label class="support-attach-button" for="support-chat-attachments" aria-label="Thêm ảnh hoặc video" title="Thêm ảnh hoặc video">
+                <label class="support-attach-button" for="support-chat-attachments" aria-label="Thêm ảnh hoặc video" title="Thêm ảnh hoặc video" data-support-attach-button>
                     <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="m20.5 11.5-8.4 8.4a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </label>
                 <label class="sr-only" for="support-chat-body">Nội dung cần hỗ trợ</label>
@@ -49,6 +60,6 @@
                 <button type="submit" aria-label="Gửi tin nhắn"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4zM22 2 11 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
         </form>
-        <small class="support-chat-privacy">Tối đa 4 tệp · Ảnh 8 MB · Video 40 MB · Chỉ quản trị viên có quyền mới xem.</small>
+        <small class="support-chat-privacy" data-support-privacy>Tối đa 4 tệp · Ảnh 8 MB · Video 40 MB · Chỉ đội hỗ trợ có quyền mới xem.</small>
     </section>
 </aside>

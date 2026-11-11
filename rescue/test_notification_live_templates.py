@@ -175,7 +175,8 @@ class LiveNotificationTemplateTests(TestCase):
         response = self.client.get(reverse("rescue:notification-list"))
         self.assert_live_navigation(response, self.member)
         self.assertEqual(response.context["unread_notification_count"], 1)
-        self.assertContains(response, self.member_unread.title)
+        self.assertContains(response, "Trạng thái ca cứu hộ đã thay đổi")
+        self.assertIn(self.member_unread.pk, [item.pk for item in response.context["page_obj"]])
         self.assertContains(response, self.member_read.title)
         for text in (
             "Thông báo nhận nuôi đã lưu trữ", "Thông tin hồ sơ không thuộc quyền xem",

@@ -314,16 +314,27 @@ class AdminHandoffCompletionTests(TestCase):
         self.assertEqual(marker["latitude"], float(latitude))
         self.assertEqual(marker["longitude"], float(longitude))
 
-    def test_public_location_remains_exact_on_successful_map(self):
+    def test_legacy_public_flag_keeps_successful_location_private_to_participants(self):
         self.case.is_location_private = False
         self.case.save(update_fields=("is_location_private",))
         self.complete()
         response = Client().get(reverse("rescue:case-map"))
         marker = next(item for item in response.context["map_cases"] if item["id"] == self.case.pk)
-        self.assertFalse(marker["is_approximate"])
-        self.assertEqual(marker["address"], self.case.address)
-        self.assertEqual(marker["latitude"], float(self.case.latitude))
-        self.assertEqual(marker["longitude"], float(self.case.longitude))
+        self.assertTrue(marker["is_approximate"])
+        self.assertNotEqual(marker["address"], self.case.address)
+        self.assertEqual(marker["latitude"], round(float(self.case.latitude), 2))
+        self.assertEqual(marker["longitude"], round(float(self.case.longitude), 2))
+        self.assertNotContains(response, self.case.address)
+        for user in (self.admin, self.reporter):
+            with self.subTest(user=user.email):
+                client = Client()
+                client.force_login(user)
+                authorized = client.get(reverse("rescue:case-map"))
+                point = next(item for item in authorized.context["map_cases"] if item["id"] == self.case.pk)
+                self.assertFalse(point["is_approximate"])
+                self.assertEqual(point["address"], self.case.address)
+                self.assertEqual(point["latitude"], float(self.case.latitude))
+                self.assertEqual(point["longitude"], float(self.case.longitude))
 
     def test_repeated_success_is_idempotent_and_terminal_case_cannot_reopen(self):
         self.complete()

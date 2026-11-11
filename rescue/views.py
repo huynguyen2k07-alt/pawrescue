@@ -55,6 +55,9 @@ from .permissions import (
     can_review_case, is_case_assignee, is_rescue_admin,
     is_rescue_moderator, visible_cases_for,
 )
+from .privacy import (
+    can_view_case_details, can_view_case_internal, filter_case_search, present_case,
+)
 from .services import system_rescue_organization
 from .statistics import get_public_rescue_statistics
 
@@ -99,21 +102,12 @@ def _can_add_case_update(user, rescue_case):
 
 
 def _can_view_contact(user, rescue_case):
-    if not user.is_authenticated:
-        return False
-    if is_rescue_admin(user) or rescue_case.reporter_id == user.id:
-        return True
-    return is_case_assignee(user, rescue_case)
+    return can_view_case_details(user, rescue_case)
 
 
 def _can_view_exact_location(user, rescue_case, manager_organization_ids=None):
-    if not rescue_case.is_location_private:
-        return True
-    if not user.is_authenticated:
-        return False
-    if is_rescue_admin(user) or rescue_case.reporter_id == user.id:
-        return True
-    return is_case_assignee(user, rescue_case)
+    # Ca đã hoàn tất vẫn giữ địa chỉ thật riêng tư, kể cả dữ liệu cũ chưa bật cờ ẩn.
+    return can_view_case_details(user, rescue_case)
 
 
 def _form_error_message(form):
@@ -197,7 +191,7 @@ def case_image(request, pk):
         RescueCaseImage.objects.select_related("rescue_case"),
         pk=pk,
     )
-    if not _visible_cases_for(
+    if not can_view_case_details(request.user, item.rescue_case) or not _visible_cases_for(
         request.user,
         RescueCase.objects.filter(pk=item.rescue_case_id),
     ).exists():
@@ -212,7 +206,7 @@ def update_image(request, pk):
         pk=pk,
     )
     rescue_case = item.update.rescue_case
-    if not _visible_cases_for(
+    if not can_view_case_internal(request.user, rescue_case) or not _visible_cases_for(
         request.user,
         RescueCase.objects.filter(pk=rescue_case.pk),
     ).exists():
@@ -220,12 +214,14 @@ def update_image(request, pk):
     return _private_image_response(item.image)
 
 
+@never_cache
+@vary_on_cookie
 def case_list(request):
     visible_cases = _visible_cases_for(request.user, RescueCase.objects.all())
     cases = visible_cases.select_related(
         "organization",
         "reporter",
-    ).prefetch_related("images")
+    ).prefetch_related("images", "assignments")
 
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
@@ -245,11 +241,7 @@ def case_list(request):
         cases = cases.filter(status=status)
 
     if query:
-        cases = cases.filter(
-            Q(title__icontains=query)
-            | Q(description__icontains=query)
-            | Q(address__icontains=query)
-        )
+        cases = filter_case_search(cases, request.user, query)
     if animal_type in RescueCase.AnimalType.values:
         cases = cases.filter(animal_type=animal_type)
 
@@ -276,7 +268,7 @@ def case_list(request):
     rescued_cases = (
         RescueCase.objects.filter(status=RescueCase.Status.RESCUED)
         .select_related("organization", "reporter")
-        .prefetch_related("images")
+        .prefetch_related("images", "assignments")
         .order_by("-closed_at", "-updated_at")[:3]
     )
 
@@ -335,6 +327,7 @@ def case_list(request):
             return redirect(f"{reverse('rescue:case-list')}#feedback")
 
     page_obj = Paginator(cases, 9).get_page(request.GET.get("page"))
+    page_obj.object_list = [present_case(request.user, case) for case in page_obj.object_list]
     context = {
         "page_obj": page_obj,
         "query": query,
@@ -343,7 +336,7 @@ def case_list(request):
         "status_choices": PUBLIC_STATUS_FILTERS,
         "animal_type_choices": RescueCase.AnimalType.choices,
         "summary": summary,
-        "rescued_cases": rescued_cases,
+        "rescued_cases": [present_case(request.user, case) for case in rescued_cases],
         "list_title": list_title,
         "list_description": list_description,
         "knowledge_articles": KnowledgeArticle.objects.filter(
@@ -425,6 +418,8 @@ def team(request):
     )
 
 
+@never_cache
+@vary_on_cookie
 def case_detail(request, pk):
     # ===== CHỨC NĂNG CHÍNH: XEM HỒ SƠ CỨU HỘ =====
     # Hiển thị liên hệ, vị trí chính xác và thao tác xử lý theo quyền của người xem.
@@ -463,6 +458,10 @@ def case_detail(request, pk):
         for update in rescue_case.updates.all()
     )
     timeline_items.sort(key=lambda item: item["timestamp"], reverse=True)
+    can_view_internal = can_view_case_internal(request.user, rescue_case)
+    if not can_view_internal:
+        # Người báo và khách chỉ theo dõi mốc trạng thái; ghi chú/ảnh cập nhật là nội bộ.
+        timeline_items = [item for item in timeline_items if item["type"] == "status"]
     can_add_update = _can_add_case_update(request.user, rescue_case)
     is_terminal = rescue_case.status in TERMINAL_CASE_STATUSES
     can_decide = can_manage and not is_terminal
@@ -532,7 +531,8 @@ def case_detail(request, pk):
         private_assignments = rescue_case.assignments.filter(**assignment_filter)
 
     context = {
-        "case": rescue_case,
+        "case": present_case(request.user, rescue_case),
+        "can_view_internal": can_view_internal,
         "can_manage": can_manage,
         "can_claim": can_decide and (
             rescue_case.status == RescueCase.Status.REPORTED
@@ -577,6 +577,8 @@ def case_detail(request, pk):
     return render(request, "rescue/case_detail.html", context)
 
 
+@never_cache
+@vary_on_cookie
 def case_map(request):
     # ===== CHỨC NĂNG CHÍNH: BẢN ĐỒ CA CỨU HỘ THÀNH CÔNG =====
     # Chỉ đưa ca đã chốt cứu thành công vào cả danh sách và dữ liệu bản đồ công khai.
@@ -595,15 +597,16 @@ def case_map(request):
     )
     map_cases = []
     for rescue_case in cases:
+        displayed_case = present_case(request.user, rescue_case)
         latitude, longitude, is_approximate = _display_coordinates(
             request.user,
             rescue_case,
         )
-        images = list(rescue_case.images.all())
+        images = list(displayed_case.images.all())
         map_cases.append(
             {
                 "id": rescue_case.pk,
-                "title": rescue_case.title,
+                "title": displayed_case.title,
                 "latitude": latitude,
                 "longitude": longitude,
                 "is_approximate": is_approximate,
@@ -647,6 +650,8 @@ def case_map(request):
     return render(request, "rescue/case_map.html", context)
 
 
+@never_cache
+@vary_on_cookie
 @login_required
 def case_create(request):
     # ===== CHỨC NĂNG CHÍNH: GỬI YÊU CẦU CỨU HỘ =====
@@ -714,6 +719,8 @@ def case_create(request):
     )
 
 
+@never_cache
+@vary_on_cookie
 @login_required
 def my_cases(request):
     cases = (
@@ -825,8 +832,8 @@ def case_add_update(request, pk):
             kind=Notification.Kind.CASE_UPDATED,
             title="Có cập nhật mới từ đội cứu hộ",
             message=(
-                f'Ca "{rescue_case.title}" vừa có nhật ký hiện trường mới: '
-                f"{rescue_update.note[:180]}"
+                f'Ca "{rescue_case.title}" vừa có cập nhật xử lý mới. '
+                "Ghi chú hiện trường chỉ dành cho admin và người đang được phân công."
             ),
             actor=request.user,
         )
@@ -957,7 +964,6 @@ def case_handoff(request, pk):
             )
         create_notifications(
             recipient_ids=ended_assignee_ids,
-            rescue_case=rescue_case,
             kind=Notification.Kind.CASE_ASSIGNED,
             title="Yêu cầu đã được chuyển đơn vị xử lý",
             message=f"Phân công của bạn ở ca #{pk} đã kết thúc khi quản trị viên chuyển đơn vị xử lý.",
@@ -1028,13 +1034,10 @@ def case_update_status(request, pk):
                 note=form.cleaned_data["note"],
             )
             if history is not None:
-                note = form.cleaned_data["note"].strip()
                 notification_message = (
                     f'Ca "{rescue_case.title}" đã chuyển sang trạng thái '
                     f'“{rescue_case.get_status_display()}”.'
                 )
-                if note:
-                    notification_message += f" Ghi chú: {note}"
                 create_case_notifications(
                     recipient_ids=case_participant_ids(rescue_case),
                     rescue_case=rescue_case,
@@ -1061,8 +1064,8 @@ def case_update_status(request, pk):
 @require_POST
 @login_required
 def case_notify_admins(request, pk):
-    # ===== CHỨC NĂNG CHÍNH: GỬI TIN TỰ ĐỘNG CHO ADMIN =====
-    # Admin chính giao ca và gửi riêng thông tin cho các quản trị viên; không tự xác minh hoặc công khai ca.
+    # ===== CHỨC NĂNG CHÍNH: GIAO CA VÀ NHẮN CỘNG TÁC VIÊN =====
+    # Admin chính giao ca và gửi riêng thông tin cho cộng tác viên; ca vẫn chờ xác minh và duyệt kết quả.
     if not is_rescue_admin(request.user):
         return HttpResponseForbidden("Chỉ admin được gửi tin điều phối tự động.")
     with transaction.atomic():
@@ -1080,7 +1083,7 @@ def case_notify_admins(request, pk):
             else "Chưa bổ sung vị trí"
         )
         body = (
-            f"[Tự động] Nhờ quản trị viên phối hợp xử lý ca #{pk}: {rescue_case.title}\n"
+            f"[Tự động] Nhờ cộng tác viên cứu hộ phối hợp xử lý ca #{pk}: {rescue_case.title}\n"
             f"Động vật: {rescue_case.get_animal_type_display()}\n"
             f"Mức độ: {rescue_case.get_urgency_display()}\n"
             f"Địa chỉ hiện trường: {rescue_case.address[:1200]}\n"
@@ -1124,11 +1127,11 @@ def case_notify_admins(request, pk):
         )
         if new_recipient_ids:
             messages.success(
-                request, f"Đã gửi tin tự động cho {len(new_recipient_ids)} quản trị viên.",
+                request, f"Đã gửi tin tự động cho {len(new_recipient_ids)} cộng tác viên cứu hộ.",
             )
         else:
             messages.info(
-                request, "Không có quản trị viên mới cần nhận tin; nội dung đã gửi sẽ không bị gửi trùng.",
+                request, "Không có cộng tác viên mới cần nhận tin; nội dung đã gửi sẽ không bị gửi trùng.",
             )
     return redirect("rescue:case-detail", pk=pk)
 
@@ -1248,11 +1251,49 @@ def case_assign(request, pk):
     return redirect("rescue:case-detail", pk=pk)
 
 
+def _case_chat_display_name(user):
+    # Không lấy email làm tên hiển thị trong hộp chat điều phối.
+    return user.full_name.strip() or ("Admin" if is_rescue_admin(user) else "Cộng tác viên")
+
+
+def _case_chat_state(rescue_case, user, recipients):
+    private_messages = list(rescue_case.private_messages.filter(
+        Q(sender=user) | Q(recipient=user)
+    ).select_related("sender", "recipient"))
+    return {
+        "case_id": rescue_case.pk,
+        "title": rescue_case.title,
+        "messages": [
+            {
+                "id": item.pk,
+                "body": item.body,
+                "is_own": item.sender_id == user.pk,
+                "sender_name": _case_chat_display_name(item.sender),
+                "recipient_name": _case_chat_display_name(item.recipient),
+                "created_at": item.created_at.isoformat(),
+                "read_at": item.read_at.isoformat() if item.read_at else None,
+            }
+            for item in private_messages
+        ],
+        "recipients": [
+            {"id": recipient.pk, "name": _case_chat_display_name(recipient)}
+            for recipient in recipients
+        ],
+        "unread_count": sum(
+            item.recipient_id == user.pk and item.read_at is None
+            for item in private_messages
+        ),
+    }
+
+
+@never_cache
+@vary_on_cookie
 @login_required
 @require_http_methods(("GET", "POST"))
 def case_messages(request, pk):
     # ===== CHỨC NĂNG CHÍNH: NHẮN TIN ĐIỀU PHỐI =====
     # Admin chính trao đổi với người được giao ca; chỉ người gửi và nhận được đọc tin.
+    wants_json = "application/json" in request.headers.get("Accept", "")
     rescue_case = get_object_or_404(RescueCase, pk=pk)
     if not (is_rescue_admin(request.user) or is_case_assignee(request.user, rescue_case)):
         raise Http404
@@ -1297,12 +1338,22 @@ def case_messages(request, pk):
                 actor=request.user,
                 target_url=reverse("rescue:case-messages", args=(pk,)),
             )
+        if wants_json:
+            return JsonResponse(_case_chat_state(rescue_case, request.user, recipients), status=201)
         return redirect("rescue:case-messages", pk=pk)
+
+    if request.method == "POST" and wants_json:
+        return JsonResponse({
+            "error": _form_error_message(form),
+            "errors": form.errors.get_json_data(),
+        }, status=400)
 
     private_messages = rescue_case.private_messages.filter(
         Q(sender=request.user) | Q(recipient=request.user)
     ).select_related("sender", "recipient")
     private_messages.filter(recipient=request.user, read_at__isnull=True).update(read_at=timezone.now())
+    if wants_json:
+        return JsonResponse(_case_chat_state(rescue_case, request.user, recipients))
     return render(request, "rescue/case_messages.html", {
         "case": rescue_case,
         "private_messages": private_messages,
@@ -1338,7 +1389,6 @@ def case_unassign(request, pk, assignment_pk):
             )
             create_notifications(
                 recipient_ids=(assignment.assignee_id,),
-                rescue_case=rescue_case,
                 kind=Notification.Kind.CASE_ASSIGNED,
                 title="Phân công cứu hộ của bạn đã kết thúc",
                 message=f"Admin đã kết thúc phân công của bạn ở ca #{pk}.",

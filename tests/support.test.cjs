@@ -65,6 +65,16 @@ async function supportUI({ inbox = false, closed = false } = {}) {
         "[data-support-feedback]": node("feedback"),
         "[data-support-status]": status,
         "[data-support-badge]": node("badge"),
+        "[data-support-toggle-title]": node("toggleTitle"),
+        "[data-support-toggle-copy]": node("toggleCopy"),
+        "[data-support-mode-tools]": node("modeTools"),
+        "[data-support-default]": node("defaultButton"),
+        "[data-support-full-page]": node("fullPageLink"),
+        "[data-support-case-title]": node("caseTitle"),
+        "[data-case-chat-recipient]": node("recipientControl"),
+        "[data-case-chat-recipient-select]": node("recipientSelect"),
+        "[data-support-attach-button]": node("attachButton"),
+        "[data-support-privacy]": node("privacy"),
     };
     root.querySelector = (selector) => query[selector] || null;
     root.dataset = { stateUrl: "/support/state/", sendUrl: "/support/send/", selectedId: "1" };
@@ -74,6 +84,7 @@ async function supportUI({ inbox = false, closed = false } = {}) {
             "[data-admin-file-input]": node("file"),
             "[data-admin-attachment-preview]": node("preview"),
             "[data-support-file-input]": node("file"),
+            "[data-support-attachment-preview]": node("preview"),
             "button[type='submit']": node("submit"),
         })[selector] || null;
     }
@@ -92,7 +103,7 @@ async function supportUI({ inbox = false, closed = false } = {}) {
             handlers: {},
             querySelector() { return inbox ? root : null; },
             getElementById(id) {
-                return { "support-chat": root, "support-chat-toggle": node("toggle"), "support-chat-panel": node("panel") }[id] || null;
+                return { "support-chat": root, "support-chat-toggle": node("toggle"), "support-chat-panel": node("panel"), "support-chat-title": node("title") }[id] || null;
             },
             createElement: element,
             createDocumentFragment() { return { ...element(), isFragment: true }; },

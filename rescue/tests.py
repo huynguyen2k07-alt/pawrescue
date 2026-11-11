@@ -188,7 +188,9 @@ class CommunityHomepageTests(TestCase):
         self.assertNotContains(response, "Đang cần cứu")
         self.assertContains(response, "Đã cứu thành công")
         self.assertContains(response, "Đã hủy")
-        self.assertContains(response, rescued_case.title)
+        self.assertContains(response, f"Ca cứu hộ Mèo #{rescued_case.pk}")
+        self.assertNotContains(response, rescued_case.title)
+        self.assertNotContains(response, active_case.title)
         self.assertNotContains(response, 'id="id_status"')
         self.assertContains(response, '?status=verified#rescue-cases')
         self.assertContains(response, 'action="/#rescue-cases"')
@@ -221,6 +223,10 @@ class CommunityHomepageTests(TestCase):
             [item.pk for item in cancelled_response.context["page_obj"].object_list],
             [cancelled_case.pk],
         )
+        self.client.force_login(self.superuser)
+        admin_response = self.client.get(reverse("rescue:case-list"))
+        self.assertContains(admin_response, active_case.title)
+        self.assertContains(admin_response, rescued_case.title)
 
     def test_guest_feedback_notifies_active_admins_only(self):
         response = self.client.post(
@@ -1056,7 +1062,7 @@ class RescueCaseViewTests(TestCase):
             contact_phone="0912345678",
         )
 
-    def test_case_list_and_detail_are_public(self):
+    def test_case_list_and_detail_show_public_summary_and_keep_original_for_admin(self):
         self.rescue_case.status = RescueCase.Status.VERIFIED
         self.rescue_case.save(update_fields=("status",))
 
@@ -1065,9 +1071,17 @@ class RescueCaseViewTests(TestCase):
             reverse("rescue:case-detail", args=(self.rescue_case.pk,))
         )
 
-        self.assertContains(list_response, "Cat stuck on a roof")
+        self.assertContains(list_response, f"Ca cứu hộ Mèo #{self.rescue_case.pk}")
+        self.assertNotContains(list_response, self.rescue_case.title)
         self.assertEqual(detail_response.status_code, 200)
         self.assertNotContains(detail_response, "0912345678")
+        self.assertNotContains(detail_response, self.rescue_case.title)
+        self.assertNotContains(detail_response, self.rescue_case.description)
+        self.client.force_login(self.admin)
+        admin_detail = self.client.get(reverse("rescue:case-detail", args=(self.rescue_case.pk,)))
+        self.assertContains(admin_detail, self.rescue_case.title)
+        self.assertContains(admin_detail, self.rescue_case.description)
+        self.assertContains(admin_detail, self.rescue_case.contact_phone)
 
     def test_case_create_requires_login(self):
         response = self.client.get(reverse("rescue:case-create"))
@@ -1106,6 +1120,7 @@ class RescueCaseViewTests(TestCase):
                 "location_confirmed": "on",
                 "contact_name": "Rescue Manager",
                 "contact_phone": "0900000000",
+                "is_location_private": "",
             },
         )
 
@@ -1115,6 +1130,7 @@ class RescueCaseViewTests(TestCase):
             reverse("rescue:case-detail", args=(created_case.pk,)),
         )
         self.assertEqual(created_case.reporter, self.manager)
+        self.assertTrue(created_case.is_location_private)
         recipients = set(
             Notification.objects.filter(
                 rescue_case=created_case,
@@ -1238,7 +1254,21 @@ class RescueCaseViewTests(TestCase):
             self.rescue_case.status = RescueCase.Status.VERIFIED
             self.rescue_case.save(update_fields=("status",))
             self.client.logout()
-            self.assertEqual(self.client.get(image_url).status_code, 200)
+            self.assertEqual(self.client.get(image_url).status_code, 404)
+            RescueAssignment.objects.create(
+                rescue_case=self.rescue_case, assignee=self.volunteer, assigned_by=self.admin,
+            )
+            for status in (RescueCase.Status.VERIFIED, RescueCase.Status.RESCUED):
+                self.rescue_case.status = status
+                self.rescue_case.save(update_fields=("status",))
+                self.client.logout()
+                self.assertEqual(self.client.get(image_url).status_code, 404)
+                for participant in (self.admin, self.reporter, self.volunteer):
+                    with self.subTest(status=status, user=participant.email):
+                        self.client.force_login(participant)
+                        response = self.client.get(image_url)
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(b"".join(response.streaming_content), PNG_1X1)
 
     def test_admin_can_claim_unassigned_case(self):
         self.rescue_case.reporter = self.reporter
@@ -1499,13 +1529,15 @@ class RescueCaseViewTests(TestCase):
             RescueCase.objects.filter(title="Tin báo ngoài khu vực").exists()
         )
 
-    def test_case_form_contains_location_picker_and_privacy_option(self):
+    def test_case_form_contains_location_picker_and_forces_contact_privacy(self):
         self.client.force_login(self.manager)
 
         response = self.client.get(reverse("rescue:case-create"))
 
         self.assertContains(response, 'id="location-picker-map"')
-        self.assertContains(response, 'name="is_location_private"')
+        self.assertNotContains(response, 'name="is_location_private"')
+        self.assertNotIn("is_location_private", response.context["form"].fields)
+        self.assertTrue(response.context["form"].instance.is_location_private)
         self.assertContains(response, "tại Đà Nẵng")
         self.assertContains(response, 'id="manual-coordinates"')
         self.assertTrue(response.context["form"].fields["latitude"].required)
@@ -1686,9 +1718,10 @@ class RescueCaseViewTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(RescueUpdate.objects.exists())
 
-    def test_rescue_updates_appear_in_public_case_timeline(self):
+    def test_rescue_updates_only_appear_in_internal_case_timeline(self):
         self.rescue_case.status = RescueCase.Status.VERIFIED
-        self.rescue_case.save(update_fields=("status",))
+        self.rescue_case.reporter = self.reporter
+        self.rescue_case.save(update_fields=("status", "reporter"))
         RescueUpdate.objects.create(
             rescue_case=self.rescue_case,
             author=self.manager,
@@ -1700,8 +1733,20 @@ class RescueCaseViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Cập nhật hiện trường")
-        self.assertContains(
+        self.assertNotContains(response, "Cập nhật hiện trường")
+        self.assertNotContains(
             response,
             "Đã sơ cứu và đưa động vật tới phòng khám.",
         )
+        self.client.force_login(self.reporter)
+        reporter_response = self.client.get(reverse("rescue:case-detail", args=(self.rescue_case.pk,)))
+        self.assertNotContains(reporter_response, "Đã sơ cứu và đưa động vật tới phòng khám.")
+        RescueAssignment.objects.create(
+            rescue_case=self.rescue_case, assignee=self.manager, assigned_by=self.admin,
+        )
+        for user in (self.admin, self.manager):
+            with self.subTest(user=user.email):
+                self.client.force_login(user)
+                private_response = self.client.get(reverse("rescue:case-detail", args=(self.rescue_case.pk,)))
+                self.assertContains(private_response, "Cập nhật hiện trường")
+                self.assertContains(private_response, "Đã sơ cứu và đưa động vật tới phòng khám.")

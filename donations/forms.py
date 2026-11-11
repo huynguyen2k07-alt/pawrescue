@@ -1,7 +1,9 @@
 from django import forms
+from django.db.models import Q
 
 from organizations.permissions import fundraising_organizations as _managed_organizations
-from rescue.models import RescueCase
+from rescue.models import RescueAssignment, RescueCase
+from rescue.permissions import is_rescue_admin
 from rescue.uploads import sanitize_image_upload
 
 from .models import CampaignExpense, Donation, FundraisingCampaign
@@ -91,9 +93,18 @@ class FundraisingCampaignForm(BaseFundraisingCampaignForm):
         super().__init__(*args, **kwargs)
         organizations = _managed_organizations(user)
         self.fields["organization"].queryset = organizations
-        self.fields["rescue_case"].queryset = RescueCase.objects.filter(
+        cases = RescueCase.objects.filter(
             organization__in=organizations
         ).select_related("organization")
+        if not is_rescue_admin(user):
+            if user is None or not user.is_authenticated or not user.is_active:
+                cases = cases.none()
+            else:
+                assigned_case_ids = RescueAssignment.objects.filter(
+                    assignee_id=user.pk, is_active=True,
+                ).values("rescue_case_id")
+                cases = cases.filter(Q(reporter_id=user.pk) | Q(pk__in=assigned_case_ids))
+        self.fields["rescue_case"].queryset = cases
         self.fields["rescue_case"].required = False
 
 

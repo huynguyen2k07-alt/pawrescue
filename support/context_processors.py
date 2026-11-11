@@ -1,5 +1,3 @@
-from django.db.models import Q
-
 from accounts.permissions import is_support_operator
 from .models import SupportMessage
 
@@ -19,10 +17,7 @@ def support_chat(request):
             is_read_by_admin=False,
         )
         if not user.is_superuser:
-            unread_messages = unread_messages.filter(
-                Q(conversation__assigned_to__isnull=True)
-                | Q(conversation__assigned_to=user)
-            )
+            unread_messages = unread_messages.filter(conversation__assigned_to=user)
         return {
             "support_chat_unread_count": 0,
             "support_admin_unread_count": unread_messages.count(),

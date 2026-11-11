@@ -4,6 +4,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
 from django.shortcuts import redirect, render
+from django.views.decorators.cache import never_cache
+from django.views.decorators.vary import vary_on_cookie
 
 from rescue.models import RescueCase
 from rescue.permissions import is_rescue_admin, is_rescue_moderator
@@ -33,6 +35,8 @@ def register(request):
     return render(request, "accounts/register.html", {"form": form})
 
 
+@never_cache
+@vary_on_cookie
 @login_required
 def profile(request):
     context = {
@@ -47,6 +51,8 @@ def profile(request):
     return render(request, "accounts/profile.html", context)
 
 
+@never_cache
+@vary_on_cookie
 @login_required
 def collaborator_dashboard(request):
     # Quản trị viên cứu hộ xem ca được giao; quyền đọc hộp thư hỗ trợ được kiểm tra riêng.
@@ -90,9 +96,7 @@ def collaborator_dashboard(request):
             )
         )
         if not request.user.is_superuser:
-            conversations = conversations.filter(
-                Q(assigned_to__isnull=True) | Q(assigned_to=request.user)
-            )
+            conversations = conversations.filter(assigned_to=request.user)
         context.update({
             "open_conversation_count": conversations.exclude(
                 status=SupportConversation.Status.CLOSED

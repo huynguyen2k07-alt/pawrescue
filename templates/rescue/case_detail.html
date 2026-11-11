@@ -57,7 +57,7 @@
                 <div class="fact-grid case-summary">
                     <div>
                         <span>Địa điểm</span>
-                        <strong>{% if case.is_location_private and not can_view_location %}Vị trí chính xác được bảo vệ{% else %}{{ case.address }}{% endif %}</strong>
+                        <strong>{% if not can_view_location %}Vị trí chính xác được bảo vệ{% else %}{{ case.address }}{% endif %}</strong>
                     </div>
                     <div>
                         <span>Đơn vị phụ trách</span>
@@ -109,7 +109,7 @@
                                                 {% for item_image in update_images %}<a href="{% url 'rescue:update-image' item_image.pk %}" target="_blank" rel="noopener"><img src="{% url 'rescue:update-image' item_image.pk %}" alt="Ảnh cập nhật {{ forloop.counter }} cho {{ case.title }}" loading="lazy"></a>{% endfor %}
                                             </div>{% endif %}
                                         {% endwith %}
-                                        {% if update.author %}<small>{{ update.author.full_name|default:update.author.email }}</small>{% endif %}
+                                        {% if can_view_internal and update.author %}<small>{{ update.author.full_name|default:"Nhân sự cứu hộ" }}</small>{% endif %}
                                     </div>
                                 </li>
                             {% endwith %}
@@ -119,8 +119,8 @@
                                     <span class="timeline-dot"></span>
                                     <div>
                                         <div class="timeline-heading-row"><strong>{{ history.get_to_status_display }}</strong><time>{{ history.changed_at|date:"H:i, d/m/Y" }}</time></div>
-                                        {% if history.note %}<p>{{ history.note|linebreaksbr }}</p>{% endif %}
-                                        {% if history.changed_by %}<small>{{ history.changed_by.full_name|default:history.changed_by.email }}</small>{% endif %}
+                                        {% if can_view_internal and history.note %}<p>{{ history.note|linebreaksbr }}</p>{% endif %}
+                                        {% if can_view_internal and history.changed_by %}<small>{{ history.changed_by.full_name|default:"Nhân sự cứu hộ" }}</small>{% endif %}
                                     </div>
                                 </li>
                             {% endwith %}
@@ -145,15 +145,15 @@
                         {% if can_decide %}{# Admin chính duyệt kết quả trước khi công khai ca thành công lên bản đồ. #}
                             {% if is_pending_review and completion_report %}
                                 <section class="case-operation case-operation-body case-review-report" id="case-pending-review" aria-label="Báo cáo chờ duyệt">
-                                    <h3>Quản trị viên báo đã hoàn thành</h3>
+                                    <h3>Cộng tác viên báo đã hoàn thành</h3>
                                     <p>{{ completion_report.note|linebreaksbr }}</p>
                                     <small>{% if completion_report.changed_by %}{{ completion_report.changed_by.full_name|default:completion_report.changed_by.email }} · {% endif %}{{ completion_report.changed_at|date:"H:i, d/m/Y" }}</small>
                                 </section>
                             {% endif %}
                             <form class="case-admin-notify" method="post" action="{% url 'rescue:case-notify-admins' case.pk %}">
                                 {% csrf_token %}
-                                <button class="button button-ghost button-block" type="submit"{% if not admin_notification_count %} disabled{% endif %}>Gửi ca cho các quản trị viên</button>
-                                {% if admin_notification_count %}<small>Tự giao ca và gửi thông tin, địa điểm cùng liên kết hồ sơ cho {{ admin_notification_count }} quản trị viên. Nội dung đã gửi sẽ không bị gửi trùng.</small>{% else %}<small>Chưa có quản trị viên đang hoạt động để nhận ca.</small>{% endif %}
+                                <button class="button button-ghost button-block" type="submit"{% if not admin_notification_count %} disabled{% endif %}>Gửi ca cho các cộng tác viên cứu hộ</button>
+                                {% if admin_notification_count %}<small>Tự giao ca và gửi riêng thông tin cho {{ admin_notification_count }} cộng tác viên/cá nhân hoặc trung tâm hỗ trợ. Nội dung đã gửi sẽ không bị gửi trùng.</small>{% else %}<small>Chưa có cộng tác viên cứu hộ đang hoạt động để nhận ca.</small>{% endif %}
                             </form>
 
                             <form class="case-operation case-operation-body case-completion" id="case-complete" method="post" action="{% url 'rescue:case-update-status' case.pk %}">
@@ -216,26 +216,26 @@
                                 </form>
                             </details>
                         {% endif %}
-                        {% if private_assignments or has_case_messages or has_admin_recipients %}<a class="button button-ghost button-block" href="{% url 'rescue:case-messages' case.pk %}">Trao đổi điều phối</a>{% endif %}
+                        {% if private_assignments or has_case_messages or has_admin_recipients %}<a class="button button-ghost button-block" href="{% url 'rescue:case-messages' case.pk %}" data-case-chat-url="{% url 'rescue:case-messages' case.pk %}" data-case-chat-title="Ca #{{ case.pk }}">Nhắn cộng tác viên trong khung chat</a>{% endif %}
                     </div>
                 </section>
             {% elif can_review %}
                 <section class="panel action-panel case-operations" id="moderator-actions" aria-label="Xử lý ca được giao">
                     <h2>Ca được giao cho bạn</h2>
-                    <p><strong>Quản trị viên</strong> · Kiểm tra tin báo và gửi kết quả để admin chính duyệt.</p>
+                    <p><strong>Cộng tác viên cứu hộ</strong> · Cá nhân/trung tâm kiểm tra tin được giao và gửi kết quả để admin chính duyệt.</p>
                     <div class="case-operation-list">
-                        <a class="button button-ghost button-block" href="{% url 'rescue:case-messages' case.pk %}">Nhắn admin chính</a>
+                        <a class="button button-ghost button-block" href="{% url 'rescue:case-messages' case.pk %}" data-case-chat-url="{% url 'rescue:case-messages' case.pk %}" data-case-chat-title="Ca #{{ case.pk }}">Nhắn admin chính</a>
                         {% if is_pending_review %}
                             <div class="case-operation case-operation-body" id="case-pending-review">
                                 <strong>Đã báo hoàn thành · Chờ admin chính duyệt</strong>
                                 <p>Ca chỉ xuất hiện trên bản đồ công khai sau khi admin chính xác nhận thành công.</p>
                             </div>
-                        {% elif can_moderate %}{# Quản trị viên chỉ xử lý ca được giao; admin chính giữ quyền công khai kết quả. #}
+                        {% elif can_moderate %}{# Cộng tác viên chỉ xử lý ca được giao; admin chính giữ quyền công khai kết quả. #}
                             {% if case.status == 'reported' or case.status == 'assigned' %}
                                 <form method="post" action="{% url 'rescue:case-update-status' case.pk %}">
                                     {% csrf_token %}
                                     <input type="hidden" name="status" value="verified">
-                                    <input type="hidden" name="note" value="Quản trị viên đã kiểm tra và xác nhận thông tin tin báo.">
+                                    <input type="hidden" name="note" value="Cộng tác viên cứu hộ đã kiểm tra và xác nhận thông tin tin báo.">
                                     <button class="button button-ghost button-block" type="submit">Xác nhận thông tin</button>
                                 </form>
                             {% endif %}
@@ -261,12 +261,12 @@
                 <section class="panel action-panel case-member-status">
                     <h2>Ca được giao cho bạn</h2>
                     <p>Xem vị trí, cập nhật tình hình và báo kết quả cho admin chính.</p>
-                    <a class="button button-primary button-block" href="{% url 'rescue:case-messages' case.pk %}">Nhắn admin chính</a>
+                    <a class="button button-primary button-block" href="{% url 'rescue:case-messages' case.pk %}" data-case-chat-url="{% url 'rescue:case-messages' case.pk %}" data-case-chat-title="Ca #{{ case.pk }}">Nhắn admin chính</a>
                 </section>
             {% elif user.is_authenticated and case.reporter_id == user.pk %}
                 <section class="panel action-panel case-member-status">
                     <h2>Theo dõi tin báo</h2>
-                    <p>Quản trị viên sẽ kiểm tra thông tin và liên hệ với bạn khi cần.</p>
+                    <p>Admin và cộng tác viên được giao ca sẽ kiểm tra thông tin, liên hệ với bạn khi cần.</p>
                     <a class="button button-ghost button-block" href="{% url 'rescue:notification-list' %}">Xem thông báo</a>
                     {% if not support_is_operator %}<p class="privacy-note">Bạn có thể gửi thêm thông tin qua cửa sổ chat hỗ trợ.</p>{% endif %}
                 </section>
@@ -278,10 +278,10 @@
                     <strong>{{ case.get_status_display }}</strong>
                     {% if case.closed_at %}<p>{{ case.closed_at|date:"H:i, d/m/Y" }}</p>{% endif %}
                     {% if case.status == 'rescued' %}
-                        {% if not case.is_location_private or can_view_location %}<p><strong>Địa chỉ đã xử lý:</strong> {{ case.address }}</p>{% endif %}
+                        {% if can_view_location %}<p><strong>Địa chỉ đã xử lý:</strong> {{ case.address }}</p>{% endif %}
                         <p><a href="{% url 'rescue:case-map' %}">Xem trên bản đồ cứu hộ thành công →</a></p>
                     {% endif %}
-                    <a href="?history=1#case-history">Xem đánh giá trong lịch sử</a>
+                    <a href="?history=1#case-history">{% if can_view_internal %}Xem đánh giá trong lịch sử{% else %}Xem các mốc xử lý{% endif %}</a>
                 </section>
             {% endif %}
 
@@ -327,6 +327,6 @@
 {% block extra_scripts %}
 {% if map_latitude != None %}
 <script defer src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
-<script defer src="{% static 'js/maps.js' %}?v=20261102-6"></script>
+<script defer src="{% static 'js/maps.js' %}?v=20261107-1"></script>
 {% endif %}
 {% endblock %}

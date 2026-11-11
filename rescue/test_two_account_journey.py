@@ -197,8 +197,13 @@ class AdminAndGuestJourneyTests(TestCase):
         )
 
         self.client.force_login(self.guest)
-        self.assertContains(self.client.get(detail_url), assessment)
+        reporter_detail = self.client.get(detail_url)
+        self.assertContains(reporter_detail, "Đã cứu thành công")
+        self.assertNotContains(reporter_detail, assessment)
+        self.assertNotContains(reporter_detail, field_note)
         self.assertContains(
             self.client.get(reverse("rescue:notification-list")),
             "Trạng thái ca cứu hộ đã thay đổi",
         )
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(detail_url), assessment)

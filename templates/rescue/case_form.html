@@ -12,7 +12,7 @@
     <div class="page-intro">
         <span class="eyebrow eyebrow-dark">Gửi tin từ hiện trường</span>
         <h1>Báo một ca cần cứu hộ</h1>
-        <p>Mô tả tình trạng, nhập địa chỉ và ghim vị trí tại Đà Nẵng. Quản trị viên sẽ kiểm tra và kết nối bên cứu hộ.</p>
+        <p>Mô tả tình trạng, nhập địa chỉ và ghim vị trí tại Đà Nẵng. Admin chính tiếp nhận và giao cộng tác viên kiểm tra, hỗ trợ cứu hộ.</p>
     </div>
 
     <form class="panel form-panel" method="post" enctype="multipart/form-data" novalidate>{# Báo cáo gửi quản trị viên cần địa chỉ cụ thể và ghim bản đồ cùng xác định đúng hiện trường. #}
@@ -60,7 +60,7 @@
                             <span>{{ form.location_confirmed.label }} <span aria-hidden="true">*</span></span>
                         </label>
                         {% for error in form.location_confirmed.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
-                        <p class="privacy-note">Admin và người được giao ca nhận địa chỉ cùng ghim đã chọn. Vòng sai số chỉ là gợi ý khi lấy vị trí.</p>
+                        <p class="privacy-note">Liên hệ, ảnh hiện trường và địa chỉ cụ thể chỉ dành cho bạn, admin chính và người đang được giao ca. Người ngoài xem trạng thái và khu vực gần đúng, kể cả khi ca đã hoàn tất.</p>
                         <noscript><p class="field-error">Trình duyệt đang tắt JavaScript. Hãy nhập địa chỉ cụ thể và tọa độ tại Đà Nẵng ở hai ô bên dưới.</p></noscript>
                         <details class="case-operation" id="manual-coordinates"{% if form.latitude.errors or form.longitude.errors %} open{% endif %}>
                             <summary>Nhập tọa độ thủ công</summary>
@@ -73,16 +73,9 @@
                     </div>
                 {% endif %}
                 {% if field.name != 'latitude' and field.name != 'longitude' and field.name != 'animal_details' and field.name != 'contact_name' and field.name != 'location_confirmed' %}
-                <div class="field {% if field.name == 'description' or field.name == 'address' or field.name == 'images' or field.name == 'title' or field.name == 'is_location_private' %}field-wide{% endif %}">
-                    {% if field.name == 'is_location_private' %}
-                        <label class="checkbox-control" for="{{ field.id_for_label }}">
-                            {{ field }}
-                            <span>{{ field.label }}</span>
-                        </label>
-                    {% else %}
-                        <label for="{{ field.id_for_label }}">{% if field.name == 'address' %}Địa chỉ cụ thể / mốc nhận biết{% else %}{{ field.label }}{% endif %}{% if field.field.required %}<span aria-hidden="true">*</span>{% endif %}</label>
-                        {{ field }}
-                    {% endif %}
+                <div class="field {% if field.name == 'description' or field.name == 'address' or field.name == 'images' or field.name == 'title' %}field-wide{% endif %}">
+                    <label for="{{ field.id_for_label }}">{% if field.name == 'address' %}Địa chỉ cụ thể / mốc nhận biết{% else %}{{ field.label }}{% endif %}{% if field.field.required %}<span aria-hidden="true">*</span>{% endif %}</label>
+                    {{ field }}
                     {% if field.name == 'address' %}
                         <small>Nhập số nhà, tên đường hoặc địa điểm dễ nhận biết tại Đà Nẵng, rồi tìm và kiểm tra ghim.</small>
                         {% if address_search_enabled %}
@@ -120,6 +113,6 @@
 
 {% block extra_scripts %}
 <script defer src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
-<script defer src="{% static 'js/maps.js' %}?v=20261102-6"></script>
+<script defer src="{% static 'js/maps.js' %}?v=20261107-1"></script>
 {% if address_search_enabled %}<script defer src="{% static 'js/address-search.js' %}?v=20261102-1"></script>{% endif %}
 {% endblock %}

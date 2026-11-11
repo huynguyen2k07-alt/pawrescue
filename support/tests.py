@@ -65,14 +65,16 @@ class SupportChatTests(TestCase):
             data["attachments"] = attachments
         return self.client.post(reverse("support:chat-send"), data)
 
-    def test_authenticated_user_sees_chat_widget_but_admin_does_not(self):
+    def test_user_and_admin_share_chat_widget_with_separate_access_modes(self):
         self.client.force_login(self.user)
         user_response = self.client.get(reverse("rescue:case-list"))
         self.client.force_login(self.admin)
         admin_response = self.client.get(reverse("rescue:case-list"))
 
         self.assertContains(user_response, 'id="support-chat"')
-        self.assertNotContains(admin_response, 'id="support-chat"')
+        self.assertContains(admin_response, 'id="support-chat"')
+        self.assertContains(admin_response, 'data-support-operator="true"')
+        self.assertContains(admin_response, 'data-support-inbox-url="/support/inbox/"')
         self.assertContains(admin_response, "Hộp thư hỗ trợ")
 
     def test_user_message_creates_conversation_and_notifies_admin(self):
@@ -202,6 +204,8 @@ class SupportChatTests(TestCase):
     def test_collaborator_has_separate_portal_and_can_reply(self):
         self.send_user_message("Cộng tác viên có thể hỗ trợ không?")
         conversation = SupportConversation.objects.get(user=self.user)
+        conversation.assigned_to = self.collaborator
+        conversation.save(update_fields=("assigned_to",))
         self.client.force_login(self.collaborator)
 
         dashboard_response = self.client.get(reverse("collaborators:dashboard"))
@@ -215,7 +219,7 @@ class SupportChatTests(TestCase):
         )
 
         self.assertEqual(dashboard_response.status_code, 200)
-        self.assertContains(dashboard_response, "Không gian cộng tác viên")
+        self.assertContains(dashboard_response, "Nhân viên hỗ trợ")
         self.assertEqual(inbox_response.status_code, 200)
         self.assertContains(inbox_response, "Hộp thư PawRescue")
         self.assertRedirects(

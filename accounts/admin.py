@@ -24,9 +24,9 @@ class UserAdmin(BaseUserAdmin):
 
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        ("Personal information", {"fields": ("full_name", "phone", "role")}),
+        ("Thông tin tài khoản", {"fields": ("full_name", "phone", "role")}),
         (
-            "Permissions",
+            "Phân quyền",
             {
                 "fields": (
                     "is_active",
@@ -37,7 +37,7 @@ class UserAdmin(BaseUserAdmin):
                 )
             },
         ),
-        ("Important dates", {"fields": ("last_login", "date_joined")}),
+        ("Thời gian hoạt động", {"fields": ("last_login", "date_joined")}),
     )
 
     add_fieldsets = (

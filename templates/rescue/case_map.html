@@ -13,8 +13,8 @@
         <div>
             <span class="eyebrow eyebrow-dark">Dấu chân cứu hộ thành công</span>
             <h1>Bản đồ cứu hộ Đà Nẵng</h1>
-            <p>Bản đồ công khai chỉ hiển thị các ca đã được admin chính duyệt cứu hộ thành công tại Đà Nẵng. Vị trí riêng tư vẫn được bảo vệ.</p>
-            <p>Bấm ghim để xem ảnh, địa điểm, đơn vị cứu hộ và thời điểm duyệt thành công.</p>
+            <p>Bản đồ công khai chỉ hiển thị các ca đã được admin chính duyệt cứu hộ thành công tại Đà Nẵng. Địa chỉ cụ thể và liên hệ luôn được bảo vệ.</p>
+            <p>Bấm ghim để xem loại động vật, khu vực gần đúng, đơn vị và thời điểm hoàn tất.</p>
         </div>
         <a class="button button-accent" href="{% url 'rescue:case-create' %}">Báo ca mới</a>
     </div>
@@ -94,5 +94,5 @@
 
 {% block extra_scripts %}
 <script defer src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
-<script defer src="{% static 'js/maps.js' %}?v=20261102-6"></script>
+<script defer src="{% static 'js/maps.js' %}?v=20261107-1"></script>
 {% endblock %}

@@ -69,8 +69,8 @@ class RescueCase(models.Model):
     contact_phone = models.CharField(max_length=20, blank=True)
     address = models.TextField()
     is_location_private = models.BooleanField(
-        default=False,
-        help_text="Chỉ người báo tin và đội cứu hộ thấy vị trí chính xác.",
+        default=True,
+        help_text="Địa chỉ cụ thể chỉ dành cho admin, người báo tin và người đang được giao ca; người ngoài luôn xem vị trí gần đúng.",
     )
     latitude = models.DecimalField(
         max_digits=9,
